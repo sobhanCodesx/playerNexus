@@ -1,98 +1,244 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { useRouter } from 'expo-router';
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
-
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
-  return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
-  );
-}
+import { albums, artists, tracks } from '@/data/library';
+import { nexusTokens } from '@/design/nexus-tokens';
+import { usePlayer } from '@/providers/player-provider';
+import { NexusAlbumTile, NexusArtistBubble, TinyAction } from '@/components/nexus/nexus-cards';
+import {
+  NexusArtwork,
+  NexusIcon,
+  NexusIconButton,
+  NexusSurface,
+  NexusText,
+  SectionHeader,
+} from '@/components/nexus/nexus-primitives';
+import { NexusScreen } from '@/components/nexus/nexus-screen';
 
 export default function HomeScreen() {
+  const router = useRouter();
+  const { width } = useWindowDimensions();
+  const player = usePlayer();
+  const artSize = Math.min(width - 72, 292);
+  const albumWidth = Math.min(164, (width - 56) / 2);
+
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
+    <NexusScreen>
+      <View style={styles.header}>
+        <View>
+          <NexusText variant="micro" muted style={styles.eyebrow}>GOOD EVENING</NexusText>
+          <NexusText variant="title">Your listening space</NexusText>
+        </View>
+        <NexusIconButton
+          ios="gearshape.fill"
+          android="settings"
+          accessibilityLabel="Settings"
+          onPress={() => router.push('/settings')}
+          size={44}
+        />
+      </View>
 
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
-
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
+      <Pressable
+        onPress={player.openPlayer}
+        accessibilityRole="button"
+        accessibilityLabel={'Continue listening to ' + player.track.title}
+        style={styles.hero}>
+        <View style={styles.heroOrbit}>
+          <View style={[styles.heroHalo, { backgroundColor: player.track.palette[0] }]} />
+          <NexusArtwork
+            palette={player.track.palette}
+            size={artSize}
+            active={player.isPlaying}
+            style={styles.heroArtwork}
           />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
+          <NexusSurface style={styles.heroChip} intensity="strong">
+            <View style={[styles.liveDot, { backgroundColor: player.theme.accent }]} />
+            <NexusText variant="micro">CONTINUE LISTENING</NexusText>
+          </NexusSurface>
+        </View>
+        <View style={styles.heroMeta}>
+          <View style={{ flex: 1, gap: 4 }}>
+            <NexusText variant="display" numberOfLines={1} style={styles.heroTitle}>{player.track.title}</NexusText>
+            <NexusText muted>{player.track.artist} · {player.track.album}</NexusText>
+          </View>
+          <View style={styles.heroArrow}>
+            <NexusIcon ios="arrow.up.right" android="north_east" size={22} />
+          </View>
+        </View>
+      </Pressable>
 
-        {Platform.OS === 'web' && <WebBadge />}
-      </SafeAreaView>
-    </ThemedView>
+      <View style={styles.section}>
+        <SectionHeader title="Recently played" action={<TinyAction label="All" onPress={() => router.push('/library')} />} />
+        <View style={styles.coverFlow}>
+          {tracks.slice(1, 4).map((track, index) => (
+            <Pressable
+              key={track.id}
+              onPress={() => {
+                player.playTrack(track);
+                player.openPlayer();
+              }}
+              style={[
+                styles.flowItem,
+                index === 0 && { transform: [{ rotate: '-5deg' }, { translateX: 10 }, { scale: 0.91 }], opacity: 0.68 },
+                index === 1 && { zIndex: 3, transform: [{ translateY: -8 }] },
+                index === 2 && { transform: [{ rotate: '5deg' }, { translateX: -10 }, { scale: 0.91 }], opacity: 0.68 },
+              ]}>
+              <NexusArtwork palette={track.palette} size={118} radius={24} />
+              {index === 1 && (
+                <View style={styles.flowLabel}>
+                  <NexusText variant="caption" numberOfLines={1}>{track.title}</NexusText>
+                  <NexusText variant="micro" muted>{track.artist.toUpperCase()}</NexusText>
+                </View>
+              )}
+            </Pressable>
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <SectionHeader title="Albums" action={<TinyAction label="Library" onPress={() => router.push('/library')} />} />
+        <View style={styles.albumGrid}>
+          {albums.map((album) => <NexusAlbumTile key={album.id} album={album} width={albumWidth} />)}
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <SectionHeader title="Artists" />
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.artistRail}>
+          {artists.map((artist) => <NexusArtistBubble key={artist.id} artist={artist} />)}
+        </ScrollView>
+      </View>
+
+      <View style={styles.section}>
+        <SectionHeader title="Favorites" />
+        <Pressable onPress={() => router.push('/library')}>
+          <View style={styles.favoriteStack}>
+            <View style={[styles.stackPlate, styles.stackBack, { backgroundColor: tracks[2].palette[1] }]} />
+            <View style={[styles.stackPlate, styles.stackMid, { backgroundColor: tracks[0].palette[0] }]} />
+            <NexusSurface style={styles.favoriteFront} intensity="strong">
+              <View style={styles.favoriteIcon}>
+                <NexusIcon ios="heart.fill" android="favorite" size={22} color={player.theme.accent} />
+              </View>
+              <View style={{ flex: 1, gap: 2 }}>
+                <NexusText variant="heading">Your pulse</NexusText>
+                <NexusText variant="caption" muted>12 tracks that stayed with you</NexusText>
+              </View>
+              <NexusIcon ios="chevron.right" android="chevron_right" size={20} color="#8F969D" />
+            </NexusSurface>
+          </View>
+        </Pressable>
+      </View>
+
+      <View style={styles.footer}>
+        <NexusText variant="micro" muted>NEXUS PLAYER · LOCAL FIRST</NexusText>
+      </View>
+    </NexusScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
+  header: {
+    minHeight: 64,
     flexDirection: 'row',
-  },
-  safeArea: {
-    flex: 1,
-    paddingHorizontal: Spacing.four,
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
+    gap: 16,
+    marginBottom: 22,
   },
-  heroSection: {
+  eyebrow: { marginBottom: 5, letterSpacing: 1.2 },
+  hero: { alignItems: 'center', marginBottom: 34 },
+  heroOrbit: {
+    width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
+    paddingVertical: 12,
   },
-  title: {
-    textAlign: 'center',
+  heroHalo: {
+    position: 'absolute',
+    width: 250,
+    height: 250,
+    borderRadius: 999,
+    opacity: 0.13,
+    transform: [{ scaleX: 1.26 }, { scaleY: 0.84 }],
   },
-  code: {
-    textTransform: 'uppercase',
+  heroArtwork: {
+    transform: [{ rotate: '-1.1deg' }],
   },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
+  heroChip: {
+    position: 'absolute',
+    bottom: -2,
+    borderRadius: 999,
+    height: 34,
+    paddingHorizontal: 13,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
+  liveDot: { width: 6, height: 6, borderRadius: 3 },
+  heroMeta: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 14,
+    marginTop: 24,
+  },
+  heroTitle: { fontSize: 34, lineHeight: 39 },
+  heroArrow: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  section: { marginTop: 30, gap: 16 },
+  coverFlow: {
+    height: 172,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+  },
+  flowItem: { width: 112, alignItems: 'center' },
+  flowLabel: {
+    position: 'absolute',
+    top: 122,
+    width: 150,
+    alignItems: 'center',
+    gap: 1,
+  },
+  albumGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+    justifyContent: 'space-between',
+  },
+  artistRail: { gap: 22, paddingRight: 20 },
+  favoriteStack: { height: 106, justifyContent: 'flex-end', paddingTop: 18 },
+  stackPlate: {
+    position: 'absolute',
+    left: 20,
+    right: 20,
+    height: 76,
+    borderRadius: 24,
+    opacity: 0.16,
+  },
+  stackBack: { top: 0, transform: [{ scaleX: 0.91 }] },
+  stackMid: { top: 9, transform: [{ scaleX: 0.96 }], opacity: 0.11 },
+  favoriteFront: {
+    height: 82,
+    borderRadius: nexusTokens.radius.lg,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  favoriteIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  footer: { marginTop: 42, alignItems: 'center', opacity: 0.55 },
 });
