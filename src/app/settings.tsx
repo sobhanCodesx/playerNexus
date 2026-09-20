@@ -50,6 +50,8 @@ const themeOptions: Array<{ id: NexusThemeMode; label: string }> = [
   { id: 'light', label: 'Light' },
 ];
 
+const crossfadeOptions = [0, 2, 4, 6] as const;
+
 const qualityOptions: Array<{ id: NexusVisualQuality; label: string }> = [
   { id: 'low', label: 'Low' },
   { id: 'balanced', label: 'Balanced' },
@@ -108,7 +110,8 @@ export default function SettingsScreen() {
         <NexusText variant="micro" muted style={styles.label}>AUDIO & FEEDBACK</NexusText>
         <NexusSurface style={styles.group} intensity="soft">
           <SettingRow
-            title="Gapless playback"
+            title="Seamless preload"
+            subtitle="Pre-buffer the next local track for near-instant transitions"
             value={settings.gapless}
             onValueChange={(value) => updateSetting('gapless', value)}
             icon={{ ios: 'waveform', android: 'graphic_eq' }}
@@ -129,7 +132,36 @@ export default function SettingsScreen() {
             }}
             icon={{ ios: 'waveform.path.ecg', android: 'graphic_eq' }}
           />
-          <SettingRow title="Crossfade" subtitle="Reserved for the playback engine pass" icon={{ ios: 'arrow.triangle.merge', android: 'merge' }} />
+          <View style={styles.crossfadeRow}>
+            <View style={styles.rowIcon}>
+              <NexusIcon ios="arrow.triangle.merge" android="merge" size={18} color="#B9C0C6" />
+            </View>
+            <View style={{ flex: 1, gap: 4 }}>
+              <View style={styles.crossfadeHeader}>
+                <NexusText>Crossfade</NexusText>
+                <NexusText variant="micro" muted>
+                  {settings.crossfadeSeconds ? settings.crossfadeSeconds + ' SEC' : 'OFF'}
+                </NexusText>
+              </View>
+              <View style={styles.crossfadeSegments}>
+                {crossfadeOptions.map((seconds) => {
+                  const active = settings.crossfadeSeconds === seconds;
+                  return (
+                    <Pressable
+                      key={seconds}
+                      onPress={() => updateSetting('crossfadeSeconds', seconds)}
+                      style={[styles.crossfadeSegment, active && styles.crossfadeSegmentActive]}>
+                      <NexusText
+                        variant="micro"
+                        style={{ color: active ? '#F5F7F8' : '#737B82' }}>
+                        {seconds === 0 ? 'OFF' : seconds + 'S'}
+                      </NexusText>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          </View>
         </NexusSurface>
       </View>
 
@@ -231,6 +263,18 @@ const styles = StyleSheet.create({
   },
   qualityItem: { flex: 1, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   qualityActive: { backgroundColor: 'rgba(255,255,255,0.10)' },
+  crossfadeRow: {
+    minHeight: 94,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
+  },
+  crossfadeHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  crossfadeSegments: { height: 34, flexDirection: 'row', gap: 4 },
+  crossfadeSegment: { flex: 1, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.035)' },
+  crossfadeSegmentActive: { backgroundColor: 'rgba(255,255,255,0.11)' },
   qualityHint: { lineHeight: 18, paddingHorizontal: 2 },
   replay: {
     minHeight: 68,
