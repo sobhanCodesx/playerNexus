@@ -21,11 +21,6 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 17
-          cache: gradle
       - name: Install
         run: |
           if ! npm ci; then
@@ -35,6 +30,11 @@ jobs:
           fi
       - name: TypeScript
         run: npm run typecheck
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
       - name: Expo prebuild Android
         run: npx expo prebuild --platform android --no-install --clean
       - name: Compile Android debug
