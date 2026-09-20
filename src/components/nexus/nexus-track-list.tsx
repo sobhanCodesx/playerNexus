@@ -11,6 +11,7 @@ type NexusTrackListProps = {
   tracks: Track[];
   header?: ReactElement | null;
   empty?: ReactElement | null;
+  footer?: ReactElement | null;
   showNumber?: boolean;
   contentContainerStyle?: StyleProp<ViewStyle>;
   onTrackPress?: (track: Track, index: number) => void;
@@ -20,6 +21,7 @@ function NexusTrackListComponent({
   tracks,
   header,
   empty,
+  footer,
   showNumber = true,
   contentContainerStyle,
   onTrackPress,
@@ -52,6 +54,7 @@ function NexusTrackListComponent({
       keyExtractor={(item) => item.id}
       ListHeaderComponent={header ?? null}
       ListEmptyComponent={empty ?? null}
+      ListFooterComponent={footer ?? null}
       contentContainerStyle={contentContainerStyle}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
