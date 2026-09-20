@@ -49,6 +49,14 @@ export function NexusPlayerLayer() {
     player.closePlayer();
     router.push('/lyrics');
   };
+  const openVisualizer = async () => {
+    if (!player.audioReactiveEnabled) {
+      const enabled = await player.enableAudioReactive();
+      if (!enabled) return;
+    }
+    player.closePlayer();
+    router.push('/visualizer');
+  };
 
   useEffect(() => {
     expansion.value = withSpring(player.expanded ? 1 : 0, {
@@ -297,9 +305,7 @@ export function NexusPlayerLayer() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={player.audioReactiveEnabled ? 'Audio reactive visuals enabled' : 'Enable audio reactive visuals'}
-              onPress={() => {
-                if (!player.audioReactiveEnabled) player.enableAudioReactive();
-              }}
+              onPress={openVisualizer}
               style={styles.orbMode}>
               <NexusOrb palette={player.track.palette} active={player.isPlaying} bands={player.audioBands} size={68} />
               <NexusText variant="micro" muted>{player.audioReactiveEnabled ? 'AUDIO LIVE' : 'TAP FOR LIVE'}</NexusText>
