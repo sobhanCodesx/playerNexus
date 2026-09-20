@@ -1,16 +1,22 @@
 import { Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Image } from 'expo-image';
 
-import { albums, artists, tracks } from '@/data/library';
 import { gradientBackground } from '@/design/nexus-tokens';
 import { NexusAlbumTile, NexusTrackRow } from '@/components/nexus/nexus-cards';
 import { NexusIconButton, NexusText, SectionHeader } from '@/components/nexus/nexus-primitives';
 import { NexusScreen } from '@/components/nexus/nexus-screen';
+import { usePlayer } from '@/providers/player-provider';
 
 export default function ArtistScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string }>();
+  const player = usePlayer();
+  const artists = player.libraryArtists;
+  const albums = player.libraryAlbums;
+  const tracks = player.libraryTracks;
   const artist = artists.find((item) => item.id === params.id) ?? artists[0];
+  if (!artist) return null;
   const topTracks = tracks.filter((track) => track.artist === artist.name);
   const artistAlbums = albums.filter((album) => album.artist === artist.name);
   const { width } = useWindowDimensions();
@@ -26,7 +32,10 @@ export default function ArtistScreen() {
       <View style={styles.hero}>
         <View style={[styles.portrait, { width: Math.min(width - 80, 292), height: Math.min(width - 80, 292), borderRadius: 999 }, gradientBackground([artist.palette[0], artist.palette[2], artist.palette[3] ?? '#090B0D'], 138)]}>
           <View style={[styles.portraitLight,{backgroundColor:artist.palette[1]}]} />
-          <NexusText style={styles.monogram}>{artist.name.split(' ').map((part)=>part[0]).join('').slice(0,2)}</NexusText>
+          {artist.artworkUri ? (
+            <Image source={{uri:artist.artworkUri}} contentFit="cover" cachePolicy="memory-disk" style={StyleSheet.absoluteFill}/>
+          ) : null}
+          <NexusText style={styles.monogram}>{artist.artworkUri ? '' : artist.name.split(' ').map((part)=>part[0]).join('').slice(0,2)}</NexusText>
         </View>
         <NexusText variant="display" style={styles.name}>{artist.name}</NexusText>
         <NexusText variant="caption" muted>{artist.monthlyMood}</NexusText>

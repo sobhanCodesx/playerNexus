@@ -1,4 +1,4 @@
-import { StyleSheet, View, Vibration } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
@@ -7,6 +7,7 @@ import { Track } from '@/data/library';
 import { usePlayer } from '@/providers/player-provider';
 import { NexusIcon, NexusIconButton, NexusText } from '@/components/nexus/nexus-primitives';
 import { NexusScreen } from '@/components/nexus/nexus-screen';
+import { nexusHaptics } from '@/services/haptics';
 
 function QueueRow({ track, index, current, onMove }:{ track:Track; index:number; current:boolean; onMove:(from:number,to:number)=>void }) {
   const y=useSharedValue(0);
@@ -15,7 +16,7 @@ function QueueRow({ track, index, current, onMove }:{ track:Track; index:number;
     .activateAfterLongPress(180)
     .onStart(()=>{
       dragging.value=1;
-      runOnJS(Vibration.vibrate)(8);
+      runOnJS(nexusHaptics.lift)();
     })
     .onUpdate((event)=>{ y.value=event.translationY; })
     .onEnd(()=>{

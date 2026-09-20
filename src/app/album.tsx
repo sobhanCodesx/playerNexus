@@ -1,7 +1,6 @@
 import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
-import { albums, artists, tracks } from '@/data/library';
 import { gradientBackground, nexusTokens } from '@/design/nexus-tokens';
 import { usePlayer } from '@/providers/player-provider';
 import { NexusTrackRow } from '@/components/nexus/nexus-cards';
@@ -11,10 +10,14 @@ import { NexusScreen } from '@/components/nexus/nexus-screen';
 export default function AlbumScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string }>();
-  const album = albums.find((item) => item.id === params.id) ?? albums[0];
-  const albumTracks = tracks.filter((track) => album.trackIds.includes(track.id));
-  const artistId = artists.find((artist) => artist.name === album.artist)?.id ?? artists[0].id;
   const player = usePlayer();
+  const albums = player.libraryAlbums;
+  const artists = player.libraryArtists;
+  const tracks = player.libraryTracks;
+  const album = albums.find((item) => item.id === params.id) ?? albums[0];
+  if (!album) return null;
+  const albumTracks = tracks.filter((track) => album.trackIds.includes(track.id));
+  const artistId = artists.find((item) => item.name === album.artist)?.id ?? artists[0]?.id;
   const { width } = useWindowDimensions();
   const artSize = Math.min(width - 100, 250);
 
@@ -28,10 +31,10 @@ export default function AlbumScreen() {
       </View>
 
       <View style={styles.hero}>
-        <NexusArtwork palette={album.palette} size={artSize} active={player.track.album === album.title && player.isPlaying} />
+        <NexusArtwork palette={album.palette} artworkUri={album.artworkUri} size={artSize} active={player.track.album === album.title && player.isPlaying} />
         <View style={styles.meta}>
           <NexusText variant="display" style={styles.title}>{album.title}</NexusText>
-          <Pressable onPress={() => router.push({ pathname:'/artist', params:{ id: artistId } })}>
+          <Pressable onPress={() => artistId && router.push({ pathname:'/artist', params:{ id: artistId } })}>
             <NexusText style={styles.artist}>{album.artist}</NexusText>
           </Pressable>
           <NexusText variant="caption" muted>{album.year} · {albumTracks.length} tracks · 8 min</NexusText>

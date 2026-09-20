@@ -26,6 +26,7 @@ function SettingRow({title,subtitle,value,onValueChange,icon}:SettingRowProps){
 
 export default function SettingsScreen(){
   const router=useRouter();
+  const player=usePlayer();
   const [dynamic,setDynamic]=useState(true);
   const [amoled,setAmoled]=useState(false);
   const [motion,setMotion]=useState(true);
@@ -56,6 +57,13 @@ export default function SettingsScreen(){
         <NexusSurface style={styles.group} intensity="soft">
           <SettingRow title="Gapless playback" value={gapless} onValueChange={setGapless} icon={{ios:'waveform',android:'graphic_eq'}}/>
           <SettingRow title="Haptics" subtitle="Sparse tactile cues for meaningful actions" value={haptics} onValueChange={setHaptics} icon={{ios:'hand.tap.fill',android:'vibration'}}/>
+          <SettingRow
+            title="Audio-reactive visuals"
+            subtitle={player.audioReactiveEnabled ? 'PCM analysis is live' : 'Bass, mids and highs drive the environment'}
+            value={player.audioReactiveEnabled}
+            onValueChange={(enabled)=>{ if (enabled) player.enableAudioReactive(); }}
+            icon={{ios:'waveform.path.ecg',android:'graphic_eq'}}
+          />
           <SettingRow title="Crossfade" subtitle="Off" icon={{ios:'arrow.triangle.merge',android:'merge'}}/>
         </NexusSurface>
       </View>
@@ -76,7 +84,9 @@ export default function SettingsScreen(){
         <NexusText variant="micro" muted style={styles.label}>LIBRARY</NexusText>
         <NexusSurface style={styles.group} intensity="soft">
           <SettingRow title="Scan folders" subtitle="Choose where Nexus looks for music" icon={{ios:'folder.fill',android:'folder'}}/>
-          <SettingRow title="Rescan library" subtitle="Refresh local metadata and artwork" icon={{ios:'arrow.clockwise',android:'refresh'}}/>
+          <Pressable onPress={() => player.scanLibrary(true)}>
+            <SettingRow title="Rescan library" subtitle="Refresh local metadata and artwork" icon={{ios:'arrow.clockwise',android:'refresh'}}/>
+          </Pressable>
         </NexusSurface>
       </View>
 

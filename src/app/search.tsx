@@ -1,13 +1,17 @@
 import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
-import { albums, artists, tracks } from '@/data/library';
 import { nexusTokens } from '@/design/nexus-tokens';
 import { NexusAlbumTile, NexusArtistBubble, NexusTrackRow } from '@/components/nexus/nexus-cards';
 import { NexusIcon, NexusSurface, NexusText, SectionHeader } from '@/components/nexus/nexus-primitives';
 import { NexusScreen } from '@/components/nexus/nexus-screen';
+import { usePlayer } from '@/providers/player-provider';
 
 export default function SearchScreen() {
+  const player = usePlayer();
+  const tracks = player.libraryTracks;
+  const albums = player.libraryAlbums;
+  const artists = player.libraryArtists;
   const [query,setQuery]=useState('');
   const normalized=query.trim().toLowerCase();
   const results=useMemo(()=>({
