@@ -21,6 +21,12 @@ export default function HomeScreen() {
   const tracks = player.libraryTracks;
   const albums = player.libraryAlbums;
   const artists = player.libraryArtists;
+  const recentTracks = player.recentTracks.filter((item) => item.id !== player.track.id);
+  const recent = (recentTracks.length ? recentTracks : tracks.filter((item) => item.id !== player.track.id)).slice(0, 3);
+  const favoriteCount = player.favoriteTracks.length;
+  const favoritePalette = player.favoriteTracks[0]?.palette ?? player.track.palette;
+  const greetingHour = new Date().getHours();
+  const greeting = greetingHour < 12 ? 'GOOD MORNING' : greetingHour < 18 ? 'GOOD AFTERNOON' : 'GOOD EVENING';
   const artSize = Math.min(width - 72, 292);
   const albumWidth = Math.min(164, (width - 56) / 2);
 
@@ -28,7 +34,7 @@ export default function HomeScreen() {
     <NexusScreen>
       <View style={styles.header}>
         <View>
-          <NexusText variant="micro" muted style={styles.eyebrow}>GOOD EVENING</NexusText>
+          <NexusText variant="micro" muted style={styles.eyebrow}>{greeting}</NexusText>
           <NexusText variant="title">Your listening space</NexusText>
         </View>
         <NexusIconButton
@@ -85,7 +91,7 @@ export default function HomeScreen() {
       <View style={styles.section}>
         <SectionHeader title="Recently played" action={<TinyAction label="All" onPress={() => router.push('/library')} />} />
         <View style={styles.coverFlow}>
-          {tracks.slice(1, 4).map((track, index) => (
+          {recent.map((track, index) => (
             <Pressable
               key={track.id}
               onPress={() => {
@@ -128,15 +134,17 @@ export default function HomeScreen() {
         <SectionHeader title="Favorites" />
         <Pressable onPress={() => router.push('/library')}>
           <View style={styles.favoriteStack}>
-            <View style={[styles.stackPlate, styles.stackBack, { backgroundColor: tracks[2].palette[1] }]} />
-            <View style={[styles.stackPlate, styles.stackMid, { backgroundColor: tracks[0].palette[0] }]} />
+            <View style={[styles.stackPlate, styles.stackBack, { backgroundColor: favoritePalette[1] }]} />
+            <View style={[styles.stackPlate, styles.stackMid, { backgroundColor: favoritePalette[0] }]} />
             <NexusSurface style={styles.favoriteFront} intensity="strong">
               <View style={styles.favoriteIcon}>
                 <NexusIcon ios="heart.fill" android="favorite" size={22} color={player.theme.accent} />
               </View>
               <View style={{ flex: 1, gap: 2 }}>
                 <NexusText variant="heading">Your pulse</NexusText>
-                <NexusText variant="caption" muted>12 tracks that stayed with you</NexusText>
+                <NexusText variant="caption" muted>
+                  {favoriteCount ? favoriteCount + (favoriteCount === 1 ? ' track stayed with you' : ' tracks that stayed with you') : 'Double-tap artwork to build your pulse'}
+                </NexusText>
               </View>
               <NexusIcon ios="chevron.right" android="chevron_right" size={20} color="#8F969D" />
             </NexusSurface>
