@@ -1,13 +1,14 @@
+import { memo } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 
 import { Album, Artist, Track } from '@/data/library';
 import { nexusTokens } from '@/design/nexus-tokens';
-import { usePlayer } from '@/providers/player-provider';
+import { usePlayerActions } from '@/providers/player-provider';
 import { NexusArtwork, NexusIcon, NexusText } from './nexus-primitives';
 
-export function NexusTrackRow({
+function NexusTrackRowComponent({
   track,
   index,
   showNumber = true,
@@ -18,7 +19,7 @@ export function NexusTrackRow({
   showNumber?: boolean;
   onPress?: () => void;
 }) {
-  const { playTrack } = usePlayer();
+  const { playTrack } = usePlayerActions();
   return (
     <Pressable
       onPress={onPress ?? (() => playTrack(track))}
@@ -43,6 +44,8 @@ export function NexusTrackRow({
     </Pressable>
   );
 }
+
+export const NexusTrackRow = memo(NexusTrackRowComponent);
 
 export function NexusAlbumTile({ album, width = 158 }: { album: Album; width?: number }) {
   const router = useRouter();
