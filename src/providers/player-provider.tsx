@@ -30,6 +30,8 @@ import { getNexusQualityProfile } from '@/design/quality-profile';
 import { useNexusSettings } from '@/providers/settings-provider';
 import {
   getMusicPermission,
+  isExpoGoRuntime,
+  pickMusicFilesForExpoGo,
   requestMusicPermission,
   resolveTrackArtwork,
   resolveTrackWaveform,
@@ -94,6 +96,8 @@ type PlayerContextValue = {
   clearUpcoming: () => void;
   moveQueueItem: (from: number, to: number) => void;
   scanLibrary: (requestPermission?: boolean) => Promise<LibraryPermission>;
+  chooseMusicFiles: () => Promise<number>;
+  isExpoGoRuntime: boolean;
   enableAudioReactive: () => Promise<boolean>;
   hydrateArtworkWindow: (tracks: Track[]) => void;
 };
@@ -329,6 +333,33 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       return permission;
     }
   }, []);
+
+  const chooseMusicFiles = useCallback(async () => {
+    try {
+      setLibraryStatus('scanning');
+      const picked = await pickMusicFilesForExpoGo();
+      if (!picked.length) {
+        setLibraryStatus(deviceTracks.length ? 'ready' : 'permission');
+        return 0;
+      }
+
+      setDeviceTracks((current) => {
+        const byId = new Map(current.map((item) => [item.id, item] as const));
+        picked.forEach((item) => byId.set(item.id, item));
+        return [...byId.values()];
+      });
+      setQueue(picked);
+      setCurrentIndex(0);
+      setDemoPlaying(false);
+      playIntent.current = false;
+      setLibraryPermission('granted');
+      setLibraryStatus('ready');
+      return picked.length;
+    } catch {
+      setLibraryStatus('error');
+      return 0;
+    }
+  }, [deviceTracks.length]);
 
   useEffect(() => {
     scanLibrary(false);
@@ -969,6 +1000,8 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       });
     },
     scanLibrary,
+    chooseMusicFiles,
+    isExpoGoRuntime: isExpoGoRuntime(),
     enableAudioReactive,
     hydrateArtworkWindow,
   }), [
@@ -1006,6 +1039,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     openPlayer,
     closePlayer,
     scanLibrary,
+    chooseMusicFiles,
     enableAudioReactive,
     hydrateArtworkWindow,
   ]);

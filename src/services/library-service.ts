@@ -1,6 +1,6 @@
 import { PermissionsAndroid, Platform } from 'react-native';
 import Constants from 'expo-constants';
-import * as MediaLibrary from 'expo-media-library/legacy';
+import * as DocumentPicker from 'expo-document-picker';
 
 import NexusMedia, {
   isNexusMediaAvailable,
@@ -69,7 +69,17 @@ const mapNativeTrack = (track: NativeMusicTrack): Track => ({
 const cleanFilename = (filename: string) =>
   filename.replace(/\.[a-z0-9]{1,6}$/i, '').replace(/[_-]+/g, ' ').trim() || 'Unknown track';
 
-const mapExpoAsset = (asset: MediaLibrary.Asset): Track => {
+type ExpoAudioAsset = {
+  id: string;
+  filename: string;
+  albumId?: string | null;
+  duration?: number;
+  creationTime?: number;
+  modificationTime?: number;
+  uri: string;
+};
+
+const mapExpoAsset = (asset: ExpoAudioAsset): Track => {
   const title = cleanFilename(asset.filename);
   const albumId = asset.albumId ?? 'local-files';
   const durationMs = Math.max(0, Math.round((asset.duration ?? 0) * 1000));
@@ -92,6 +102,7 @@ const mapExpoAsset = (asset: MediaLibrary.Asset): Track => {
 };
 
 async function scanWithExpoMediaLibrary(limit: number): Promise<Track[]> {
+  const MediaLibrary = await import('expo-media-library/legacy');
   const result: Track[] = [];
   let after: string | undefined;
 
@@ -103,7 +114,7 @@ async function scanWithExpoMediaLibrary(limit: number): Promise<Track[]> {
       sortBy: [[MediaLibrary.SortBy.creationTime, false]],
     });
 
-    result.push(...page.assets.map(mapExpoAsset));
+    result.push(...page.assets.map((asset) => mapExpoAsset(asset as ExpoAudioAsset)));
 
     if (!page.hasNextPage || !page.endCursor) break;
     after = page.endCursor;
@@ -114,6 +125,43 @@ async function scanWithExpoMediaLibrary(limit: number): Promise<Track[]> {
 
 const isExpoGo = Constants.appOwnership === 'expo';
 
+export function isExpoGoRuntime() {
+  return isExpoGo;
+}
+
+export async function pickMusicFilesForExpoGo(): Promise<Track[]> {
+  const result = await DocumentPicker.getDocumentAsync({
+    type: 'audio/*',
+    multiple: true,
+    copyToCacheDirectory: true,
+  });
+
+  if (result.canceled) return [];
+
+  const now = Date.now();
+  return result.assets.map((asset, index) => {
+    const title = cleanFilename(asset.name);
+    const seed = asset.name + ':' + asset.size + ':' + index;
+    return {
+      id: 'device:picker:' + encodeURIComponent(asset.uri),
+      nativeId: undefined,
+      uri: asset.uri,
+      title,
+      artist: 'Unknown artist',
+      album: 'Selected files',
+      albumId: 'selected-files',
+      duration: '0:00',
+      durationMs: 0,
+      year: 0,
+      dateAdded: now - index,
+      displayName: asset.name,
+      folder: 'Selected files',
+      palette: fallbackPalette(seed),
+      source: 'device' as const,
+    };
+  });
+}
+
 const androidAudioPermission = () =>
   Number(Platform.Version) >= 33
     ? PermissionsAndroid.PERMISSIONS.READ_MEDIA_AUDIO
@@ -123,13 +171,9 @@ export async function getMusicPermission(): Promise<LibraryPermission> {
   if (Platform.OS !== 'android') return 'granted';
 
   try {
-    if (isExpoGo) {
-      const response = await MediaLibrary.getPermissionsAsync(false, ['audio']);
-      if (response.granted) return 'granted';
-      if (response.canAskAgain === false) return 'blocked';
-      return response.status === 'undetermined' ? 'undetermined' : 'denied';
-    }
+    if (isExpoGo) return 'granted';
 
+    const MediaLibrary = await import('expo-media-library/legacy');
     const permission = androidAudioPermission();
     const nativeGranted = await PermissionsAndroid.check(permission);
     if (nativeGranted) return 'granted';
@@ -147,13 +191,9 @@ export async function requestMusicPermission(): Promise<LibraryPermission> {
   if (Platform.OS !== 'android') return 'granted';
 
   try {
-    if (isExpoGo) {
-      const response = await MediaLibrary.requestPermissionsAsync(false, ['audio']);
-      if (response.granted) return 'granted';
-      if (response.canAskAgain === false) return 'blocked';
-      return response.status === 'undetermined' ? 'undetermined' : 'denied';
-    }
+    if (isExpoGo) return 'granted';
 
+    const MediaLibrary = await import('expo-media-library/legacy');
     const permission = androidAudioPermission();
     const nativeResult = await PermissionsAndroid.request(permission);
 
@@ -208,6 +248,7 @@ export async function getMusicAccessDiagnostics(): Promise<MusicAccessDiagnostic
 
 export async function scanDeviceMusic(limit = 5000): Promise<Track[]> {
   if (Platform.OS !== 'android') return [];
+  if (isExpoGo) return [];
 
   if (isNexusMediaAvailable && NexusMedia) {
     try {

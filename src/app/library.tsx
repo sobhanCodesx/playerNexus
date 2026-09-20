@@ -122,6 +122,11 @@ export default function LibraryScreen() {
     if (requestingMusicAccess) return;
     setRequestingMusicAccess(true);
     try {
+      if (player.isExpoGoRuntime) {
+        await player.chooseMusicFiles();
+        return;
+      }
+
       const permission = await player.scanLibrary(true);
       const diagnostics = await getMusicAccessDiagnostics().catch(() => null);
       setMusicDiagnostics(diagnostics);
@@ -137,9 +142,7 @@ export default function LibraryScreen() {
             diagnostics.permission.split('.').pop(),
             'declared: ' + (diagnostics.declared === null ? 'unknown' : diagnostics.declared ? 'yes' : 'NO'),
             'granted: ' + (diagnostics.granted ? 'yes' : 'no'),
-            diagnostics.expoGo
-              ? 'runtime: Expo Go audio fallback'
-              : 'native scanner: ' + (diagnostics.nativeScanner ? 'yes' : 'NO'),
+            'native scanner: ' + (diagnostics.nativeScanner ? 'yes' : 'NO'),
           ].join(' · ')
         : 'Permission request returned ' + permission + '.';
 
@@ -150,16 +153,18 @@ export default function LibraryScreen() {
           : 'Android did not grant Music and audio access. Open the app settings and enable Music and audio.\n\n' + detail,
         [
           { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Open Settings',
-            onPress: () => Linking.openSettings().catch(() => undefined),
-          },
+          { text: 'Open Settings', onPress: () => Linking.openSettings().catch(() => undefined) },
         ],
       );
     } finally {
       setRequestingMusicAccess(false);
     }
-  }, [player.scanLibrary, requestingMusicAccess]);
+  }, [
+    player.chooseMusicFiles,
+    player.isExpoGoRuntime,
+    player.scanLibrary,
+    requestingMusicAccess,
+  ]);
 
   const createPlaylist = () => {
     const trimmed = playlistName.trim();
@@ -279,8 +284,8 @@ export default function LibraryScreen() {
         <NexusSurface style={styles.permission} intensity="strong">
           <View style={{ flex: 1, gap: 3 }}>
             <NexusText variant="caption">
-              {musicDiagnostics?.expoGo
-                ? 'Expo Go audio library'
+              {player.isExpoGoRuntime
+                ? 'Choose music from this device'
                 : musicDiagnostics?.nativeScanner === false
                   ? 'Native music scanner is missing'
                   : musicDiagnostics?.declared === false
@@ -290,8 +295,10 @@ export default function LibraryScreen() {
                     : 'Scan the Android music library'}
             </NexusText>
             <NexusText variant="micro" muted>
-              {musicDiagnostics
-                ? [
+              {player.isExpoGoRuntime
+                ? 'EXPO GO · FILE PICKER MODE'
+                : musicDiagnostics
+                  ? [
                     'SDK ' + musicDiagnostics.sdkInt,
                     musicDiagnostics.permission.split('.').pop(),
                     musicDiagnostics.declared === null
@@ -304,8 +311,8 @@ export default function LibraryScreen() {
                       : musicDiagnostics.nativeScanner
                         ? 'NATIVE YES'
                         : 'NATIVE NO',
-                  ].join(' · ')
-                : player.libraryStatus === 'error'
+                    ].join(' · ')
+                  : player.libraryStatus === 'error'
                   ? 'SCAN FAILED · TAP TO DIAGNOSE'
                   : 'FILES STAY ON THIS DEVICE'}
             </NexusText>
@@ -313,21 +320,29 @@ export default function LibraryScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={
-              player.libraryPermission === 'blocked' ? 'Open app settings' : 'Allow music access'
+              player.isExpoGoRuntime
+                ? 'Choose music files'
+                : player.libraryPermission === 'blocked'
+                  ? 'Open app settings'
+                  : 'Allow music access'
             }
             disabled={requestingMusicAccess}
             onPress={
-              player.libraryPermission === 'blocked'
-                ? () => Linking.openSettings().catch(() => undefined)
-                : handleMusicAccess
+              player.isExpoGoRuntime
+                ? handleMusicAccess
+                : player.libraryPermission === 'blocked'
+                  ? () => Linking.openSettings().catch(() => undefined)
+                  : handleMusicAccess
             }
             style={[styles.permissionAction, requestingMusicAccess && { opacity: 0.55 }]}>
             <NexusText variant="micro" style={{ color: '#111519' }}>
               {requestingMusicAccess
                 ? 'CHECKING'
-                : player.libraryPermission === 'blocked'
-                  ? 'SETTINGS'
-                  : 'ALLOW'}
+                : player.isExpoGoRuntime
+                  ? 'CHOOSE'
+                  : player.libraryPermission === 'blocked'
+                    ? 'SETTINGS'
+                    : 'ALLOW'}
             </NexusText>
           </Pressable>
         </NexusSurface>
