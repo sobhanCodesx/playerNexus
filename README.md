@@ -1,56 +1,86 @@
-# Welcome to your Expo app 👋
+# NEXUS PLAYER
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A local-first Android music experience built with React Native, Expo, TypeScript and Expo Router.
 
-## Get started
+**Design principle:** *Music should become the interface.*
 
-1. Install dependencies
+Nexus Player is built around an original visual system called **Nexus Glass Engine**. Artwork-derived atmosphere, material depth, motion and tactile controls are treated as part of playback rather than decoration.
 
-   ```bash
-   npm install
-   ```
+## Current implementation
 
-2. Start the app
+The current `main` branch contains the first production UI/motion foundation:
 
-   ```bash
-   npx expo start
-   ```
+- cinematic Home with a large Continue Listening object, cover-flow history, album grid, artist rail and favorites stack;
+- persistent Mini Player that interactively morphs into the full Now Playing environment;
+- Now Playing with Nexus Aura, Nexus Orb, custom waveform seek surface and non-template controls;
+- artwork gestures for next/previous, favorite, queue access and player collapse/expand;
+- Library views for songs, albums, artists, playlists and folders;
+- Album and Artist detail experiences;
+- instant Search over the current local index adapter;
+- reorderable Queue;
+- focus-based Lyrics mode;
+- Settings surfaces for appearance, playback, haptics and visualizer quality;
+- dynamic artwork palette roles and contrast moderation;
+- reusable Nexus primitives and motion tokens.
 
-In the output, you'll find options to open the app in a
+The UI currently runs against seeded local demo metadata in `src/data/library.ts`. It does **not** claim that device audio scanning or playback is connected yet.
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+## Native audio phase
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+The next native integration layer should connect Expo SDK 57-compatible modules with a regenerated lockfile:
 
-## Get a fresh project
+1. Android media permission and local audio discovery.
+2. Metadata and artwork cache.
+3. Real playback queue, position and background controls.
+4. Audio-reactive analysis feeding Nexus Orb / visualizer.
+5. Artwork palette extraction feeding the dynamic theme.
+6. Haptics and Android blur/refraction fallbacks.
+7. Persisted settings, folder scopes and first-run onboarding.
 
-When you're ready, run:
+Presentation code should not import device media APIs directly. Keep scanning/playback behind services or adapters so Development Build-specific code stays isolated from the Nexus UI layer.
 
-```bash
-npm run reset-project
+## Architecture
+
+```text
+src/
+  app/                    Expo Router screens
+  components/nexus/       Nexus UI primitives + player shell
+  data/                   current demo library adapter
+  design/                 tokens and palette derivation
+  providers/              player/application state
+docs/
+  NEXUS_GLASS_ENGINE.md   product, material, motion and performance rules
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Important primitives include:
 
-### Other setup steps
+- `NexusSurface`
+- `NexusArtwork`
+- `NexusAura`
+- `NexusOrb`
+- `NexusWaveform`
+- `NexusIconButton`
+- `NexusPlayerLayer`
+- `NexusDock`
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+## Development
 
-## Learn more
+```bash
+npm install
+npm run android
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+For native media/audio work, use a Development Build / Prebuild rather than assuming Expo Go can expose every Android playback capability.
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## Product rules
 
-## Join the community
+- interaction moments may be expressive; idle states must be calm;
+- atmosphere is derived from music, never generic purple/blue neon;
+- no card-inside-card dashboards;
+- no full-screen permanent heavy blur;
+- visual hierarchy should come from spacing, typography and depth before borders;
+- every animation must communicate continuity, state, physics or feedback;
+- Now Playing is the most expressive surface; utility screens intentionally stay calmer;
+- 60 FPS is the minimum experience target, with adaptive quality for higher refresh displays.
 
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+See [docs/NEXUS_GLASS_ENGINE.md](docs/NEXUS_GLASS_ENGINE.md) for the design contract.
