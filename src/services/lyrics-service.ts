@@ -152,7 +152,7 @@ export async function resolveLyrics(track: Track): Promise<NexusLyricsDocument |
 
 export async function importLyricsForTrack(track: Track): Promise<NexusLyricsDocument | null> {
   const result = await DocumentPicker.getDocumentAsync({
-    type: ['text/plain', 'application/octet-stream'],
+    type: '*/*',
     copyToCacheDirectory: true,
     multiple: false,
   });
