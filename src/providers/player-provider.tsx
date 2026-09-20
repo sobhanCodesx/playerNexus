@@ -564,6 +564,27 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     requestNotificationPermissionsAsync().catch(() => undefined);
   }, []);
 
+  const cancelTransition = useCallback(() => {
+    if (transitionTimer.current) {
+      clearInterval(transitionTimer.current);
+      transitionTimer.current = null;
+    }
+    const secondary = handoffRef.current?.player ?? transitionPlayer.current;
+    if (secondary) {
+      try {
+        secondary.pause();
+        secondary.remove();
+      } catch {
+        // Native player may already have been released during a completed handoff.
+      }
+    }
+    handoffRef.current = null;
+    transitionPlayer.current = null;
+    transitioningRef.current = false;
+    setIsTransitioning(false);
+    audioPlayer.volume = 1;
+  }, [audioPlayer]);
+
   const startCrossfade = useCallback(
     (targetIndex: number, requestedSeconds: number) => {
       if (
@@ -636,9 +657,11 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     resolveNextIndex,
     settings.crossfadeSeconds,
     startCrossfade,
+    cancelTransition,
   ]);
 
   const playTrack = useCallback((nextTrack: Track) => {
+    if (transitioningRef.current) cancelTransition();
     let index = queue.findIndex((item) => item.id === nextTrack.id);
     let targetQueue = queue;
 
@@ -677,6 +700,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     queue,
     settings.crossfadeSeconds,
     startCrossfade,
+    cancelTransition,
   ]);
 
   const playQueue = useCallback((tracks: Track[], startTrackId?: string) => {
@@ -693,6 +717,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   }, []);
 
   const togglePlayback = useCallback(() => {
+    if (transitioningRef.current) cancelTransition();
     if (isRealTrack) {
       if (audioStatus.playing) {
         playIntent.current = false;
@@ -714,9 +739,17 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       playIntent.current = !playing;
       return !playing;
     });
-  }, [audioPlayer, audioStatus.playing, ensureNotificationPermission, isRealTrack, track]);
+  }, [
+    audioPlayer,
+    audioStatus.playing,
+    cancelTransition,
+    ensureNotificationPermission,
+    isRealTrack,
+    track,
+  ]);
 
   const next = useCallback(() => {
+    if (transitioningRef.current) cancelTransition();
     const nextIndex = resolveNextIndex(currentIndex, true);
     if (nextIndex < 0) return;
     playIntent.current = isPlaying;
@@ -737,6 +770,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   ]);
 
   const previous = useCallback(() => {
+    if (transitioningRef.current) cancelTransition();
     if (isRealTrack && audioStatus.currentTime > 4) {
       audioPlayer.seekTo(0).catch(() => undefined);
       return;
@@ -747,7 +781,15 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       return repeatMode === 'all' ? Math.max(0, queue.length - 1) : 0;
     });
     setDemoProgress(0);
-  }, [audioPlayer, audioStatus.currentTime, isPlaying, isRealTrack, queue.length, repeatMode]);
+  }, [
+    audioPlayer,
+    audioStatus.currentTime,
+    cancelTransition,
+    isPlaying,
+    isRealTrack,
+    queue.length,
+    repeatMode,
+  ]);
 
   const seek = useCallback((value: number) => {
     const normalized = Math.min(1, Math.max(0, value));
