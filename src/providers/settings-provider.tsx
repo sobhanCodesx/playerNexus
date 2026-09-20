@@ -105,9 +105,6 @@ export function NexusSettingsProvider({ children }: PropsWithChildren) {
         .then(setHighTextContrastEnabled)
         .catch(() => undefined);
     };
-    const accessibilityService = Platform.OS === 'android'
-      ? AccessibilityInfo.addEventListener('accessibilityServiceChanged', refreshHighContrast)
-      : null;
     const appState = AppState.addEventListener('change', (state) => {
       if (state === 'active') refreshHighContrast();
     });
@@ -116,7 +113,6 @@ export function NexusSettingsProvider({ children }: PropsWithChildren) {
       active = false;
       reduceMotion.remove();
       screenReader.remove();
-      accessibilityService?.remove();
       appState.remove();
     };
   }, []);
