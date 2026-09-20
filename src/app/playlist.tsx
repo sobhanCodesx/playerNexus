@@ -1,9 +1,11 @@
+import { useCallback, useMemo } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
+import type { Track } from '@/data/library';
 import { useNexusCollections } from '@/providers/collections-provider';
 import { usePlayer } from '@/providers/player-provider';
-import { NexusTrackRow } from '@/components/nexus/nexus-cards';
+import { NexusTrackList } from '@/components/nexus/nexus-track-list';
 import { NexusIcon, NexusIconButton, NexusSurface, NexusText } from '@/components/nexus/nexus-primitives';
 import { NexusScreen } from '@/components/nexus/nexus-screen';
 
@@ -13,14 +15,33 @@ export default function PlaylistScreen() {
   const collections = useNexusCollections();
   const player = usePlayer();
   const playlist = collections.playlists.find((item) => item.id === id);
-  if (!playlist) return null;
 
-  const byId = new Map(player.libraryTracks.map((track) => [track.id, track] as const));
-  const tracks = playlist.trackIds.map((trackId) => byId.get(trackId)).filter((track): track is NonNullable<typeof track> => Boolean(track));
+  const byId = useMemo(
+    () => new Map(player.libraryTracks.map((track) => [track.id, track] as const)),
+    [player.libraryTracks],
+  );
+  const tracks = useMemo(
+    () =>
+      playlist
+        ? playlist.trackIds
+            .map((trackId) => byId.get(trackId))
+            .filter((track): track is Track => Boolean(track))
+        : [],
+    [byId, playlist],
+  );
+
+  const playFromPlaylist = useCallback(
+    (track: Track) => {
+      player.playQueue(tracks, track.id);
+    },
+    [player.playQueue, tracks],
+  );
+
+  if (!playlist) return null;
   const palette = tracks[0]?.palette ?? player.track.palette;
 
-  return (
-    <NexusScreen>
+  const header = (
+    <>
       <View style={styles.nav}>
         <NexusIconButton ios="chevron.left" android="arrow_back" accessibilityLabel="Back" onPress={() => router.back()} size={44} />
         <NexusText variant="micro" muted>LOCAL PLAYLIST</NexusText>
@@ -60,50 +81,58 @@ export default function PlaylistScreen() {
           <NexusText variant="caption">Add music</NexusText>
         </Pressable>
       </View>
+    </>
+  );
 
-      {tracks.length ? (
-        <View style={styles.list}>
-          {tracks.map((track, index) => (
-            <NexusTrackRow key={track.id} track={track} index={index} />
-          ))}
-        </View>
-      ) : (
-        <NexusSurface style={styles.empty} intensity="soft">
-          <NexusText variant="heading">This playlist is still silent.</NexusText>
-          <NexusText muted style={styles.emptyCopy}>Add music and shape the order later from Queue.</NexusText>
-          <Pressable
-            onPress={() => router.push({ pathname: '/playlist-add', params: { id: playlist.id } })}
-            style={styles.emptyAction}>
-            <NexusText variant="caption" style={{ color: '#111519' }}>Choose tracks</NexusText>
-          </Pressable>
-        </NexusSurface>
-      )}
+  const footer = (
+    <Pressable
+      onPress={() => {
+        collections.deletePlaylist(playlist.id);
+        router.back();
+      }}
+      style={styles.delete}>
+      <NexusText variant="caption" muted>Delete playlist</NexusText>
+    </Pressable>
+  );
 
-      <Pressable
-        onPress={() => {
-          collections.deletePlaylist(playlist.id);
-          router.back();
-        }}
-        style={styles.delete}>
-        <NexusText variant="caption" muted>Delete playlist</NexusText>
-      </Pressable>
+  return (
+    <NexusScreen scroll={false} contentContainerStyle={styles.screen}>
+      <NexusTrackList
+        tracks={tracks}
+        header={header}
+        footer={footer}
+        onTrackPress={playFromPlaylist}
+        contentContainerStyle={styles.listContent}
+        empty={
+          <NexusSurface style={styles.empty} intensity="soft">
+            <NexusText variant="heading">This playlist is still silent.</NexusText>
+            <NexusText muted style={styles.emptyCopy}>Add music and shape the order later from Queue.</NexusText>
+            <Pressable
+              onPress={() => router.push({ pathname: '/playlist-add', params: { id: playlist.id } })}
+              style={styles.emptyAction}>
+              <NexusText variant="caption" style={{ color: '#111519' }}>Choose tracks</NexusText>
+            </Pressable>
+          </NexusSurface>
+        }
+      />
     </NexusScreen>
   );
 }
 
 const styles = StyleSheet.create({
+  screen: { paddingBottom: 0 },
+  listContent: { paddingBottom: 28 },
   nav: { height: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   hero: { marginTop: 24, gap: 24 },
   poster: { height: 166, borderRadius: 34, flexDirection: 'row', alignItems: 'flex-end', gap: 7, paddingHorizontal: 24, paddingVertical: 22, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.045)', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.1)' },
   beam: { flex: 1, borderRadius: 12, opacity: 0.74 },
   posterLine: { position: 'absolute', left: 24, right: 24, top: 22, height: 1, backgroundColor: 'rgba(255,255,255,0.22)' },
   heroCopy: { gap: 5 },
-  actions: { marginTop: 24, flexDirection: 'row', gap: 10 },
+  actions: { marginTop: 24, marginBottom: 16, flexDirection: 'row', gap: 10 },
   play: { height: 48, borderRadius: 24, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: '#F3F5F6' },
   add: { height: 48, borderRadius: 24, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: 'rgba(255,255,255,0.07)' },
-  list: { marginTop: 22 },
-  empty: { marginTop: 28, minHeight: 190, borderRadius: 30, alignItems: 'center', justifyContent: 'center', padding: 28, gap: 8 },
+  empty: { marginTop: 12, minHeight: 190, borderRadius: 30, alignItems: 'center', justifyContent: 'center', padding: 28, gap: 8 },
   emptyCopy: { textAlign: 'center' },
   emptyAction: { marginTop: 8, height: 42, borderRadius: 21, paddingHorizontal: 18, backgroundColor: '#F3F5F6', alignItems: 'center', justifyContent: 'center' },
-  delete: { marginTop: 34, alignItems: 'center', paddingVertical: 18, opacity: 0.62 },
+  delete: { marginTop: 22, alignItems: 'center', paddingVertical: 18, opacity: 0.62 },
 });
