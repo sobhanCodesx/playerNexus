@@ -210,14 +210,15 @@ export async function requestMusicPermission(): Promise<LibraryPermission> {
 }
 
 export async function getMusicAccessDiagnostics(): Promise<MusicAccessDiagnosticSnapshot> {
-  const permission =
+  const androidPermission =
     Platform.OS === 'android'
       ? androidAudioPermission()
-      : 'not-required';
+      : null;
+  const permission = androidPermission ?? 'not-required';
 
   let granted = Platform.OS !== 'android';
-  if (Platform.OS === 'android') {
-    granted = await PermissionsAndroid.check(permission).catch(() => false);
+  if (androidPermission) {
+    granted = await PermissionsAndroid.check(androidPermission).catch(() => false);
   }
 
   if (Platform.OS === 'android' && isNexusMediaAvailable && NexusMedia) {
