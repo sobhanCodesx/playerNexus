@@ -3,6 +3,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Linking,
   TextInput,
   View,
   useWindowDimensions,
@@ -206,11 +207,35 @@ export default function LibraryScreen() {
       {player.libraryStatus === 'permission' || player.libraryStatus === 'error' ? (
         <NexusSurface style={styles.permission} intensity="strong">
           <View style={{ flex: 1, gap: 3 }}>
-            <NexusText variant="caption">Scan the Android music library</NexusText>
-            <NexusText variant="micro" muted>FILES STAY ON THIS DEVICE</NexusText>
+            <NexusText variant="caption">
+              {player.libraryPermission === 'blocked'
+                ? 'Music access is blocked'
+                : 'Scan the Android music library'}
+            </NexusText>
+            <NexusText variant="micro" muted>
+              {player.libraryPermission === 'blocked'
+                ? 'OPEN SETTINGS · PERMISSIONS · MUSIC AND AUDIO'
+                : player.libraryStatus === 'error'
+                  ? 'SCAN FAILED · TRY AGAIN'
+                  : 'FILES STAY ON THIS DEVICE'}
+            </NexusText>
           </View>
-          <Pressable onPress={() => player.scanLibrary(true)} style={styles.permissionAction}>
-            <NexusText variant="micro" style={{ color: '#111519' }}>ALLOW</NexusText>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={
+              player.libraryPermission === 'blocked' ? 'Open app settings' : 'Allow music access'
+            }
+            onPress={() => {
+              if (player.libraryPermission === 'blocked') {
+                Linking.openSettings().catch(() => undefined);
+              } else {
+                player.scanLibrary(true);
+              }
+            }}
+            style={styles.permissionAction}>
+            <NexusText variant="micro" style={{ color: '#111519' }}>
+              {player.libraryPermission === 'blocked' ? 'SETTINGS' : 'ALLOW'}
+            </NexusText>
           </Pressable>
         </NexusSurface>
       ) : null}

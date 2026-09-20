@@ -1,4 +1,4 @@
-import { Platform } from 'react-native';
+import { PermissionsAndroid, Platform } from 'react-native';
 import * as MediaLibrary from 'expo-media-library/legacy';
 
 import NexusMedia, {
@@ -8,7 +8,7 @@ import NexusMedia, {
 import type { Track } from '@/data/library';
 import type { NexusPalette } from '@/design/nexus-tokens';
 
-export type LibraryPermission = 'granted' | 'denied' | 'undetermined';
+export type LibraryPermission = 'granted' | 'denied' | 'blocked' | 'undetermined';
 
 const formatDuration = (milliseconds: number) => {
   const seconds = Math.max(0, Math.round(milliseconds / 1000));
@@ -102,18 +102,45 @@ async function scanWithExpoMediaLibrary(limit: number): Promise<Track[]> {
   return result;
 }
 
+const androidAudioPermission = () =>
+  Number(Platform.Version) >= 33
+    ? PermissionsAndroid.PERMISSIONS.READ_MEDIA_AUDIO
+    : PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE;
+
 export async function getMusicPermission(): Promise<LibraryPermission> {
   if (Platform.OS !== 'android') return 'granted';
-  const response = await MediaLibrary.getPermissionsAsync(false, ['audio']);
-  if (response.granted) return 'granted';
-  return response.status === 'undetermined' ? 'undetermined' : 'denied';
+
+  try {
+    const permission = androidAudioPermission();
+    const nativeGranted = await PermissionsAndroid.check(permission);
+    if (nativeGranted) return 'granted';
+
+    const response = await MediaLibrary.getPermissionsAsync(false, ['audio']);
+    if (response.granted) return 'granted';
+    if (response.canAskAgain === false) return 'blocked';
+    return response.status === 'undetermined' ? 'undetermined' : 'denied';
+  } catch {
+    return 'undetermined';
+  }
 }
 
 export async function requestMusicPermission(): Promise<LibraryPermission> {
   if (Platform.OS !== 'android') return 'granted';
-  const response = await MediaLibrary.requestPermissionsAsync(false, ['audio']);
-  if (response.granted) return 'granted';
-  return response.status === 'undetermined' ? 'undetermined' : 'denied';
+
+  try {
+    const permission = androidAudioPermission();
+    const nativeResult = await PermissionsAndroid.request(permission);
+
+    if (nativeResult === PermissionsAndroid.RESULTS.GRANTED) return 'granted';
+    if (nativeResult === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) return 'blocked';
+
+    const response = await MediaLibrary.requestPermissionsAsync(false, ['audio']);
+    if (response.granted) return 'granted';
+    if (response.canAskAgain === false) return 'blocked';
+    return response.status === 'undetermined' ? 'undetermined' : 'denied';
+  } catch {
+    return 'blocked';
+  }
 }
 
 export async function scanDeviceMusic(limit = 5000): Promise<Track[]> {

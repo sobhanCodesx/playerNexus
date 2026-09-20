@@ -20,7 +20,9 @@
       "predictiveBackGestureEnabled": false,
       "package": "ir.playnexus.player",
       "permissions": [
-        "android.permission.POST_NOTIFICATIONS"
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.READ_MEDIA_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE"
       ]
     },
     "web": {
