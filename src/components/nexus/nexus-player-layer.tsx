@@ -295,7 +295,13 @@ export function NexusPlayerLayer() {
           </View>
 
           <View style={styles.waveBlock}>
-            <NexusWaveform progress={player.progress} onSeek={player.seek} accent={player.theme.accent} />
+            <NexusWaveform
+              progress={player.progress}
+              onSeek={player.seek}
+              accent={player.theme.accent}
+              samples={player.waveform}
+              duration={player.duration}
+            />
             <View style={styles.timeRow}>
               <NexusText variant="micro" muted>{formatTime(player.currentTime)}</NexusText>
               <NexusText variant="micro" muted>{player.track.duration}</NexusText>

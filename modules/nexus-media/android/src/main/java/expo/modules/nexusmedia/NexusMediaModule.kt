@@ -3,6 +3,10 @@ package expo.modules.nexusmedia
 import android.content.ContentUris
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.media.AudioFormat
+import android.media.MediaCodec
+import android.media.MediaExtractor
+import android.media.MediaFormat
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
@@ -11,6 +15,8 @@ import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.io.File
 import java.io.FileOutputStream
+import java.nio.ByteOrder
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sqrt
@@ -148,10 +154,196 @@ class NexusMediaModule : Module() {
       }
     }
 
+    AsyncFunction("extractWaveform") { uri: String, cacheKey: String, bucketCount: Int ->
+      val context = appContext.reactContext
+        ?: throw IllegalStateException("NexusMedia requires an active React context")
+      val buckets = bucketCount.coerceIn(24, 160)
+      val cacheDir = File(context.cacheDir, "nexus-waveforms").apply { mkdirs() }
+      val safeKey = cacheKey.replace(Regex("[^A-Za-z0-9._-]"), "_")
+      val cacheFile = File(cacheDir, "$safeKey-$buckets.wave")
+
+      if (cacheFile.exists()) {
+        val cached = cacheFile.readText()
+          .split(',')
+          .mapNotNull { it.toDoubleOrNull() }
+        if (cached.size == buckets) {
+          return@AsyncFunction cached
+        }
+      }
+
+      val waveform = decodeWaveform(context, Uri.parse(uri), buckets)
+      cacheFile.writeText(waveform.joinToString(",") { "%.5f".format(java.util.Locale.US, it) })
+      waveform
+    }
+
     AsyncFunction("clearArtworkCache") {
       val context = appContext.reactContext
         ?: throw IllegalStateException("NexusMedia requires an active React context")
       File(context.cacheDir, "nexus-artwork").deleteRecursively()
+    }
+  }
+
+  private fun decodeWaveform(
+    context: android.content.Context,
+    uri: Uri,
+    bucketCount: Int
+  ): List<Double> {
+    val extractor = MediaExtractor()
+    var codec: MediaCodec? = null
+
+    try {
+      extractor.setDataSource(context, uri, null)
+
+      var audioTrackIndex = -1
+      var inputFormat: MediaFormat? = null
+      for (index in 0 until extractor.trackCount) {
+        val candidate = extractor.getTrackFormat(index)
+        val mime = candidate.getString(MediaFormat.KEY_MIME) ?: continue
+        if (mime.startsWith("audio/")) {
+          audioTrackIndex = index
+          inputFormat = candidate
+          break
+        }
+      }
+
+      val format = inputFormat ?: return List(bucketCount) { 0.18 }
+      if (audioTrackIndex < 0) return List(bucketCount) { 0.18 }
+
+      val mime = format.getString(MediaFormat.KEY_MIME)
+        ?: return List(bucketCount) { 0.18 }
+      val durationUs = if (format.containsKey(MediaFormat.KEY_DURATION)) {
+        format.getLong(MediaFormat.KEY_DURATION).coerceAtLeast(1L)
+      } else {
+        1L
+      }
+
+      extractor.selectTrack(audioTrackIndex)
+      codec = MediaCodec.createDecoderByType(mime)
+      codec.configure(format, null, null, 0)
+      codec.start()
+
+      val info = MediaCodec.BufferInfo()
+      val peaks = DoubleArray(bucketCount)
+      var inputDone = false
+      var outputDone = false
+      var outputFormat = format
+
+      while (!outputDone) {
+        if (!inputDone) {
+          val inputIndex = codec.dequeueInputBuffer(10_000)
+          if (inputIndex >= 0) {
+            val inputBuffer = codec.getInputBuffer(inputIndex)
+            if (inputBuffer != null) {
+              inputBuffer.clear()
+              val sampleSize = extractor.readSampleData(inputBuffer, 0)
+              if (sampleSize < 0) {
+                codec.queueInputBuffer(
+                  inputIndex,
+                  0,
+                  0,
+                  0,
+                  MediaCodec.BUFFER_FLAG_END_OF_STREAM
+                )
+                inputDone = true
+              } else {
+                val presentationTimeUs = extractor.sampleTime.coerceAtLeast(0L)
+                codec.queueInputBuffer(inputIndex, 0, sampleSize, presentationTimeUs, 0)
+                extractor.advance()
+              }
+            }
+          }
+        }
+
+        when (val outputIndex = codec.dequeueOutputBuffer(info, 10_000)) {
+          MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+            outputFormat = codec.outputFormat
+          }
+          MediaCodec.INFO_TRY_AGAIN_LATER -> Unit
+          else -> {
+            if (outputIndex >= 0) {
+              if (info.size > 0) {
+                val outputBuffer = codec.getOutputBuffer(outputIndex)
+                if (outputBuffer != null) {
+                  outputBuffer.position(info.offset)
+                  outputBuffer.limit(info.offset + info.size)
+                  val channels = if (outputFormat.containsKey(MediaFormat.KEY_CHANNEL_COUNT)) {
+                    outputFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT).coerceAtLeast(1)
+                  } else 1
+                  val sampleRate = if (outputFormat.containsKey(MediaFormat.KEY_SAMPLE_RATE)) {
+                    outputFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE).coerceAtLeast(8_000)
+                  } else 44_100
+                  val encoding = if (outputFormat.containsKey(MediaFormat.KEY_PCM_ENCODING)) {
+                    outputFormat.getInteger(MediaFormat.KEY_PCM_ENCODING)
+                  } else {
+                    AudioFormat.ENCODING_PCM_16BIT
+                  }
+
+                  if (encoding == AudioFormat.ENCODING_PCM_FLOAT) {
+                    val samples = outputBuffer.order(ByteOrder.nativeOrder()).asFloatBuffer()
+                    val frames = samples.remaining() / channels
+                    for (frame in 0 until frames) {
+                      var amplitude = 0.0
+                      for (channel in 0 until channels) {
+                        amplitude = max(amplitude, abs(samples.get(frame * channels + channel).toDouble()))
+                      }
+                      val timeUs = info.presentationTimeUs +
+                        ((frame.toDouble() / sampleRate.toDouble()) * 1_000_000.0).toLong()
+                      val bucket = ((timeUs.toDouble() / durationUs.toDouble()) * bucketCount)
+                        .toInt()
+                        .coerceIn(0, bucketCount - 1)
+                      peaks[bucket] = max(peaks[bucket], amplitude.coerceIn(0.0, 1.0))
+                    }
+                  } else {
+                    val samples = outputBuffer.order(ByteOrder.nativeOrder()).asShortBuffer()
+                    val frames = samples.remaining() / channels
+                    for (frame in 0 until frames) {
+                      var amplitude = 0.0
+                      for (channel in 0 until channels) {
+                        val sample = samples.get(frame * channels + channel).toInt()
+                        amplitude = max(amplitude, abs(sample.toDouble()) / 32768.0)
+                      }
+                      val timeUs = info.presentationTimeUs +
+                        ((frame.toDouble() / sampleRate.toDouble()) * 1_000_000.0).toLong()
+                      val bucket = ((timeUs.toDouble() / durationUs.toDouble()) * bucketCount)
+                        .toInt()
+                        .coerceIn(0, bucketCount - 1)
+                      peaks[bucket] = max(peaks[bucket], amplitude.coerceIn(0.0, 1.0))
+                    }
+                  }
+                }
+              }
+
+              outputDone = info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0
+              codec.releaseOutputBuffer(outputIndex, false)
+            }
+          }
+        }
+      }
+
+      for (index in peaks.indices) {
+        if (peaks[index] == 0.0) {
+          val left = (index - 1 downTo 0).firstOrNull { peaks[it] > 0.0 }
+          val right = (index + 1 until peaks.size).firstOrNull { peaks[it] > 0.0 }
+          peaks[index] = when {
+            left != null && right != null -> (peaks[left] + peaks[right]) / 2.0
+            left != null -> peaks[left]
+            right != null -> peaks[right]
+            else -> 0.12
+          }
+        }
+      }
+
+      val maxPeak = peaks.maxOrNull()?.coerceAtLeast(0.001) ?: 1.0
+      return peaks.map { peak ->
+        sqrt((peak / maxPeak).coerceIn(0.0, 1.0)).coerceIn(0.08, 1.0)
+      }
+    } finally {
+      try {
+        codec?.stop()
+      } catch (_: Exception) {
+      }
+      codec?.release()
+      extractor.release()
     }
   }
 

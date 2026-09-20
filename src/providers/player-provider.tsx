@@ -29,6 +29,7 @@ import {
   getMusicPermission,
   requestMusicPermission,
   resolveTrackArtwork,
+  resolveTrackWaveform,
   scanDeviceMusic,
   type LibraryPermission,
 } from '@/services/library-service';
@@ -51,6 +52,7 @@ type PlayerContextValue = {
   favorite: boolean;
   theme: ReturnType<typeof deriveNexusTheme>;
   audioBands: AudioBands;
+  waveform: number[];
   audioReactiveEnabled: boolean;
   playTrack: (track: Track) => void;
   togglePlayback: () => void;
@@ -87,6 +89,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const [libraryStatus, setLibraryStatus] = useState<LibraryStatus>('checking');
   const [libraryPermission, setLibraryPermission] = useState<LibraryPermission>('undetermined');
   const [audioBands, setAudioBands] = useState<AudioBands>(silentBands);
+  const [waveform, setWaveform] = useState<number[]>([]);
   const [audioReactiveEnabled, setAudioReactiveEnabled] = useState(false);
 
   const track = queue[currentIndex] ?? queue[0] ?? demoTracks[0];
@@ -222,6 +225,19 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   }, [audioStatus.didJustFinish, isRealTrack, queue.length]);
 
   useEffect(() => {
+    let cancelled = false;
+    setWaveform([]);
+    resolveTrackWaveform(track, 52)
+      .then((values) => {
+        if (!cancelled) setWaveform(values);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [track.id, track.uri, track.source]);
+
+  useEffect(() => {
     if (!track || track.source !== 'device' || track.artworkUri) return;
     let cancelled = false;
     resolveTrackArtwork(track)
@@ -337,6 +353,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     favorite: favorites.has(track.id),
     theme: deriveNexusTheme(track.palette),
     audioBands,
+    waveform,
     audioReactiveEnabled,
     playTrack,
     togglePlayback,
@@ -382,6 +399,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     expanded,
     favorites,
     audioBands,
+    waveform,
     audioReactiveEnabled,
     playTrack,
     togglePlayback,

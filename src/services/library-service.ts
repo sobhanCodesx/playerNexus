@@ -154,3 +154,39 @@ export async function resolveTrackArtwork(track: Track) {
 export function hasEnhancedNativeLibrary() {
   return isNexusMediaAvailable;
 }
+
+
+const seededWaveform = (seed: string, buckets: number) => {
+  let hash = 2166136261;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash ^= seed.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return Array.from({ length: buckets }, (_, index) => {
+    const a = Math.sin(index * 0.91 + (hash & 31)) * 0.22;
+    const b = Math.sin(index * 0.37 + ((hash >>> 8) & 17)) * 0.16;
+    const c = Math.sin(index * 1.73 + ((hash >>> 16) & 11)) * 0.09;
+    return Math.max(0.1, Math.min(1, 0.46 + a + b + c));
+  });
+};
+
+export async function resolveTrackWaveform(track: Track, buckets = 52): Promise<number[]> {
+  const count = Math.max(24, Math.min(160, Math.round(buckets)));
+  if (
+    Platform.OS === 'android' &&
+    track.uri &&
+    track.source === 'device' &&
+    isNexusMediaAvailable &&
+    NexusMedia
+  ) {
+    try {
+      const values = await NexusMedia.extractWaveform(track.uri, track.nativeId || track.id, count);
+      if (values.length === count) {
+        return values.map((value) => Math.max(0.06, Math.min(1, Number(value) || 0.06)));
+      }
+    } catch {
+      // Keep scrubbing functional even in Expo Go or a stale Development Build.
+    }
+  }
+  return seededWaveform(track.id, count);
+}

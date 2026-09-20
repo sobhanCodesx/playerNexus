@@ -1,6 +1,7 @@
-import { PropsWithChildren, ReactNode, useEffect, useMemo } from 'react';
+import { PropsWithChildren, ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import {
   LayoutChangeEvent,
+  PanResponder,
   Pressable,
   StyleProp,
   StyleSheet,
@@ -458,47 +459,117 @@ export function NexusOrb({
   );
 }
 
-const wave = [7, 14, 10, 22, 17, 29, 15, 9, 24, 33, 18, 11, 26, 37, 20, 15, 30, 18, 12, 28, 34, 17, 23, 9, 16, 30, 24, 13, 21, 35, 18, 12, 27, 20, 10, 24, 32, 15, 21, 11, 18, 28, 14, 22, 10, 17, 25, 13];
+const fallbackWave = [0.18,0.38,0.27,0.58,0.46,0.72,0.36,0.22,0.61,0.82,0.48,0.3,0.66,0.9,0.52,0.37,0.74,0.45,0.29,0.7,0.84,0.43,0.59,0.2,0.4,0.75,0.6,0.31,0.52,0.86,0.45,0.28,0.68,0.5,0.24,0.61,0.8,0.36,0.55,0.26,0.45,0.7,0.32,0.57,0.23,0.41,0.64,0.3,0.51,0.78,0.42,0.25];
+
+const formatSeekTime = (seconds: number) => {
+  if (!Number.isFinite(seconds) || seconds <= 0) return '0:00';
+  const value = Math.floor(seconds);
+  return Math.floor(value / 60) + ':' + String(value % 60).padStart(2, '0');
+};
 
 export function NexusWaveform({
   progress,
   onSeek,
   accent,
+  samples,
+  duration = 0,
 }: {
   progress: number;
   onSeek: (value: number) => void;
   accent: string;
+  samples?: number[];
+  duration?: number;
 }) {
-  const width = useSharedValue(1);
-  const played = Math.round(progress * wave.length);
-  const onLayout = (event: LayoutChangeEvent) => {
-    width.value = event.nativeEvent.layout.width;
+  const width = useRef(1);
+  const lastTick = useRef(-1);
+  const [scrubbing, setScrubbing] = useState(false);
+  const [preview, setPreview] = useState(progress);
+  const expand = useSharedValue(0);
+
+  useEffect(() => {
+    if (!scrubbing) setPreview(progress);
+  }, [progress, scrubbing]);
+
+  const data = samples?.length ? samples : fallbackWave;
+  const displayed = scrubbing ? preview : progress;
+  const played = Math.round(displayed * Math.max(0, data.length - 1));
+
+  const updatePreview = (locationX: number, commit = false) => {
+    const normalized = Math.max(0, Math.min(1, locationX / Math.max(1, width.current)));
+    setPreview(normalized);
+    const tick = Math.round(normalized * 20);
+    if (tick !== lastTick.current) {
+      lastTick.current = tick;
+      nexusHaptics.seek();
+    }
+    if (commit) onSeek(normalized);
   };
+
+  const responder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: (_event, gesture) =>
+          Math.abs(gesture.dx) > 2 || Math.abs(gesture.dy) < 10,
+        onPanResponderGrant: (event) => {
+          setScrubbing(true);
+          expand.value = withSpring(1, { damping: 18, stiffness: 240 });
+          updatePreview(event.nativeEvent.locationX);
+        },
+        onPanResponderMove: (event) => {
+          updatePreview(event.nativeEvent.locationX);
+        },
+        onPanResponderRelease: (event) => {
+          updatePreview(event.nativeEvent.locationX, true);
+          setScrubbing(false);
+          expand.value = withSpring(0, { damping: 20, stiffness: 220 });
+        },
+        onPanResponderTerminate: () => {
+          setScrubbing(false);
+          expand.value = withSpring(0, { damping: 20, stiffness: 220 });
+        },
+      }),
+    [onSeek],
+  );
+
+  const waveformStyle = useAnimatedStyle(() => ({
+    transform: [{ scaleY: interpolate(expand.value, [0, 1], [1, 1.2]) }],
+  }));
+
+  const onLayout = (event: LayoutChangeEvent) => {
+    width.current = event.nativeEvent.layout.width;
+  };
+
   return (
-    <Pressable
-      accessibilityRole="adjustable"
-      accessibilityLabel="Track position"
-      onLayout={onLayout}
-      onPress={(event) => {
-        const next = event.nativeEvent.locationX / Math.max(1, width.value);
-        onSeek(next);
-        nexusHaptics.seek();
-      }}
-      style={styles.waveform}>
-      {wave.map((height, index) => (
+    <View style={styles.waveformShell} onLayout={onLayout} {...responder.panHandlers}>
+      {scrubbing ? (
         <View
-          key={index}
+          pointerEvents="none"
           style={[
-            styles.waveBar,
-            {
-              height,
-              backgroundColor: index <= played ? accent : 'rgba(255,255,255,0.18)',
-              opacity: index <= played ? 0.95 : 0.7,
-            },
-          ]}
-        />
-      ))}
-    </Pressable>
+            styles.seekBubble,
+            { left: Math.max(0, Math.min(width.current - 52, preview * width.current - 26)) },
+          ]}>
+          <NexusText variant="micro" style={styles.seekBubbleText}>
+            {formatSeekTime(preview * duration)}
+          </NexusText>
+        </View>
+      ) : null}
+      <Animated.View style={[styles.waveform, waveformStyle]}>
+        {data.map((value, index) => (
+          <View
+            key={index}
+            style={[
+              styles.waveBar,
+              {
+                height: 7 + Math.max(0.05, Math.min(1, value)) * 31,
+                backgroundColor: index <= played ? accent : 'rgba(255,255,255,0.18)',
+                opacity: index <= played ? 0.95 : 0.68,
+              },
+            ]}
+          />
+        ))}
+      </Animated.View>
+    </View>
   );
 }
 
@@ -593,6 +664,22 @@ const styles = StyleSheet.create({
     opacity: 0.28,
     elevation: 0,
   },
+  waveformShell: {
+    height: 58,
+    justifyContent: 'flex-end',
+  },
+  seekBubble: {
+    position: 'absolute',
+    top: -22,
+    width: 52,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(245,247,248,0.94)',
+    elevation: 8,
+  },
+  seekBubbleText: { color: '#101418' },
   waveform: {
     height: 44,
     flexDirection: 'row',

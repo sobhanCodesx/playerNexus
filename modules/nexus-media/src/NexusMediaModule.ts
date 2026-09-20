@@ -21,6 +21,7 @@ export type ResolvedArtwork = {
 export type NexusMediaNativeModule = {
   scanMusic(limit: number): Promise<NativeMusicTrack[]>;
   resolveArtwork(uri: string, cacheKey: string): Promise<ResolvedArtwork>;
+  extractWaveform(uri: string, cacheKey: string, bucketCount: number): Promise<number[]>;
   clearArtworkCache(): Promise<void>;
 };
 
