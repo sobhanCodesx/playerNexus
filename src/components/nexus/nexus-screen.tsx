@@ -15,7 +15,7 @@ export function NexusScreen({
 }: PropsWithChildren<ScrollViewProps & { scroll?: boolean }>) {
   const insets = useSafeAreaInsets();
   const { track, theme, isPlaying, audioBands } = usePlayer();
-  const { settings } = useNexusSettings();
+  const { highTextContrastEnabled, settings } = useNexusSettings();
 
   const background =
     settings.themeMode === 'amoled'
@@ -26,7 +26,9 @@ export function NexusScreen({
           ? gradientBackground(['#F2EFE9', '#E6E2DB', '#D8D4CC'], 170)
           : gradientBackground([theme.backgroundTint, '#080A0D', nexusTokens.colors.obsidian], 170);
 
-  const showAura = settings.themeMode === 'dynamic' || settings.themeMode === 'light';
+  const showAura =
+    !highTextContrastEnabled &&
+    (settings.themeMode === 'dynamic' || settings.themeMode === 'light');
 
   const content = (
     <View

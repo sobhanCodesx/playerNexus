@@ -44,7 +44,7 @@ function formatTime(seconds: number) {
 export function NexusPlayerLayer() {
   const player = usePlayer();
   const collections = useNexusCollections();
-  const { effectiveReduceMotion, settings } = useNexusSettings();
+  const { effectiveReduceMotion, screenReaderEnabled, settings } = useNexusSettings();
   const [quickActionsOpen, setQuickActionsOpen] = useState(false);
   const [playlistMode, setPlaylistMode] = useState(false);
   const router = useRouter();
@@ -152,6 +152,7 @@ export function NexusPlayerLayer() {
   }));
 
   const verticalPan = Gesture.Pan()
+    .enabled(!screenReaderEnabled)
     .activeOffsetY([-8, 8])
     .onStart(() => {
       gestureStart.value = expansion.value;
@@ -176,6 +177,7 @@ export function NexusPlayerLayer() {
     });
 
   const artworkSwipe = Gesture.Pan()
+    .enabled(!screenReaderEnabled)
     .activeOffsetX([-26, 26])
     .failOffsetY([-30, 30])
     .onEnd((event) => {
@@ -186,6 +188,7 @@ export function NexusPlayerLayer() {
     });
 
   const favoriteTap = Gesture.Tap()
+    .enabled(!screenReaderEnabled)
     .numberOfTaps(2)
     .maxDuration(240)
     .onEnd((_event, success) => {
@@ -196,6 +199,7 @@ export function NexusPlayerLayer() {
     });
 
   const longPress = Gesture.LongPress()
+    .enabled(!screenReaderEnabled)
     .minDuration(520)
     .onStart(() => {
       runOnJS(nexusHaptics.lift)();
@@ -253,7 +257,13 @@ export function NexusPlayerLayer() {
           />
           <View style={styles.miniText}>
             <NexusText variant="caption" numberOfLines={1}>{player.track.title}</NexusText>
-            <NexusText variant="micro" muted numberOfLines={1}>{player.track.artist}</NexusText>
+            <NexusText
+              variant="micro"
+              muted
+              accessibilityLiveRegion="polite"
+              numberOfLines={1}>
+              {player.playbackError ? 'Playback issue' : player.isBuffering ? 'Buffering' : player.track.artist}
+            </NexusText>
           </View>
           <Pressable
             accessibilityRole="button"
@@ -294,7 +304,13 @@ export function NexusPlayerLayer() {
               onPress={player.closePlayer}
               size={44}
             />
-            <NexusText variant="micro" muted style={styles.nowLabel}>NOW PLAYING</NexusText>
+            <NexusText
+              variant="micro"
+              muted
+              accessibilityLiveRegion="polite"
+              style={styles.nowLabel}>
+              {player.playbackError ? 'PLAYBACK ISSUE' : player.isBuffering ? 'BUFFERING' : 'NOW PLAYING'}
+            </NexusText>
             <NexusIconButton
               ios="text.line.first.and.arrowtriangle.forward"
               android="queue_music"

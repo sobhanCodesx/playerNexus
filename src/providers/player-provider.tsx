@@ -65,6 +65,8 @@ type PlayerContextValue = {
   libraryStatus: LibraryStatus;
   libraryPermission: LibraryPermission;
   isPlaying: boolean;
+  isBuffering: boolean;
+  playbackError: string | null;
   progress: number;
   currentTime: number;
   duration: number;
@@ -167,6 +169,8 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const track = queue[currentIndex] ?? queue[0] ?? demoTracks[0];
   const isRealTrack = Boolean(track?.uri && track.source === 'device');
   const isPlaying = isRealTrack ? audioStatus.playing : demoPlaying;
+  const isBuffering = isRealTrack ? audioStatus.isBuffering : false;
+  const playbackError = isRealTrack ? audioStatus.error : null;
   const duration = isRealTrack
     ? audioStatus.duration || (track.durationMs ?? 0) / 1000
     : (track.durationMs ?? 0) / 1000;
@@ -209,12 +213,13 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       if (transitionTimer.current) clearInterval(transitionTimer.current);
       transitionPlayer.current?.remove();
       transitionPlayer.current = null;
+      audioPlayer.clearLockScreenControls();
       if (preloadedUri.current) {
         clearPreloadedSource(preloadedUri.current).catch(() => undefined);
         preloadedUri.current = null;
       }
     };
-  }, []);
+  }, [audioPlayer]);
 
   useEffect(() => {
     if (!settings.gapless || !isRealTrack || !queue.length) return;
@@ -273,6 +278,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       playsInSilentMode: true,
       shouldPlayInBackground: true,
       interruptionMode: 'doNotMix',
+      shouldRouteThroughEarpiece: false,
     }).catch(() => undefined);
   }, []);
 
@@ -384,17 +390,25 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     if (!isRealTrack) {
       audioPlayer.pause();
-      audioPlayer.setActiveForLockScreen(false);
+      audioPlayer.clearLockScreenControls();
       return;
     }
 
     audioPlayer.replace({ uri: track.uri! });
-    audioPlayer.setActiveForLockScreen(true, {
-      title: track.title,
-      artist: track.artist,
-      albumTitle: track.album,
-      artworkUrl: track.artworkUri ?? undefined,
-    });
+    audioPlayer.setActiveForLockScreen(
+      true,
+      {
+        title: track.title,
+        artist: track.artist,
+        albumTitle: track.album,
+        artworkUrl: track.artworkUri ?? undefined,
+      },
+      {
+        isLiveStream: false,
+        showSeekBackward: false,
+        showSeekForward: false,
+      },
+    );
     if (playIntent.current) audioPlayer.play();
   }, [audioPlayer, isRealTrack, track.id, track.uri]);
 
@@ -453,7 +467,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     if (!isRealTrack) return;
-    audioPlayer.setActiveForLockScreen(true, {
+    audioPlayer.updateLockScreenMetadata({
       title: track.title,
       artist: track.artist,
       albumTitle: track.album,
@@ -871,6 +885,8 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     libraryStatus,
     libraryPermission,
     isPlaying,
+    isBuffering,
+    playbackError,
     progress,
     currentTime,
     duration,
@@ -963,6 +979,8 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     libraryStatus,
     libraryPermission,
     isPlaying,
+    isBuffering,
+    playbackError,
     progress,
     currentTime,
     duration,
