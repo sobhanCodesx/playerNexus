@@ -15,7 +15,7 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <PlayerProvider>
           <View style={styles.root}>
-            <StatusBar style="light" translucent />
+            <StatusBar style="light" />
             <Stack
               screenOptions={{
                 headerShown: false,

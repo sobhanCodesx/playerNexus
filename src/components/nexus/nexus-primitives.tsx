@@ -504,7 +504,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.16)',
   },
   artworkVignette: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.08)',
   },
   artworkOrb: {
@@ -537,7 +537,7 @@ const styles = StyleSheet.create({
     transform: [{ rotate: '-14deg' }],
   },
   artworkGlass: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderLeftWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.13)',

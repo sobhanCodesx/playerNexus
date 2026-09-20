@@ -174,7 +174,7 @@ export function NexusPlayerLayer() {
         <Animated.View
           pointerEvents="none"
           style={[
-            StyleSheet.absoluteFillObject,
+            StyleSheet.absoluteFill,
             backdropStyle,
             gradientBackground([
               player.theme.backgroundTint,
@@ -209,7 +209,7 @@ export function NexusPlayerLayer() {
             onPress={player.openPlayer}
             accessibilityRole="button"
             accessibilityLabel={'Open Now Playing for ' + player.track.title}
-            style={StyleSheet.absoluteFillObject}
+            style={StyleSheet.absoluteFill}
           />
           <View style={styles.miniText}>
             <NexusText variant="caption" numberOfLines={1}>{player.track.title}</NexusText>
