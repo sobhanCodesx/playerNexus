@@ -32,6 +32,7 @@ export function NexusScreen({
     <View
       style={[
         styles.content,
+        !scroll && styles.staticContent,
         { paddingTop: insets.top + 14, paddingBottom: insets.bottom + 184 },
         contentContainerStyle,
       ]}>
@@ -79,5 +80,8 @@ const styles = StyleSheet.create({
   content: {
     flexGrow: 1,
     paddingHorizontal: 20,
+  },
+  staticContent: {
+    flex: 1,
   },
 });
