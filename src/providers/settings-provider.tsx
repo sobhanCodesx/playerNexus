@@ -18,6 +18,7 @@ export type NexusSettings = {
   onboardingComplete: boolean;
   themeMode: NexusThemeMode;
   reduceMotion: boolean;
+  depthMotion: boolean;
   haptics: boolean;
   gapless: boolean;
   visualQuality: NexusVisualQuality;
@@ -37,6 +38,7 @@ const defaults: NexusSettings = {
   onboardingComplete: false,
   themeMode: 'dynamic',
   reduceMotion: false,
+  depthMotion: true,
   haptics: true,
   gapless: true,
   visualQuality: 'balanced',

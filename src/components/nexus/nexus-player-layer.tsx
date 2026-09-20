@@ -15,6 +15,8 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { usePlayer } from '@/providers/player-provider';
+import { useNexusSettings } from '@/providers/settings-provider';
+import { useNexusDeviceParallax } from '@/hooks/use-nexus-device-parallax';
 import { gradientBackground, nexusTokens } from '@/design/nexus-tokens';
 import { nexusHaptics } from '@/services/haptics';
 import {
@@ -35,12 +37,16 @@ function formatTime(seconds: number) {
 
 export function NexusPlayerLayer() {
   const player = usePlayer();
+  const { settings } = useNexusSettings();
   const router = useRouter();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const expansion = useSharedValue(player.expanded ? 1 : 0);
   const playPulse = useSharedValue(0);
+  const parallax = useNexusDeviceParallax(
+    player.expanded && settings.depthMotion && !settings.reduceMotion,
+  );
   const gestureStart = useSharedValue(0);
   const openQueue = () => {
     player.closePlayer();
@@ -95,7 +101,13 @@ export function NexusPlayerLayer() {
       transform: [
         { perspective: 900 },
         { scale: interpolate(playPulse.value, [0, 1], [1, 1.018]) },
-        { rotateX: interpolate(playPulse.value, [0, 1], [0, -1.1]) + 'deg' },
+        {
+          rotateX:
+            (interpolate(playPulse.value, [0, 1], [0, -1.1]) - parallax.y.value * 2.2) + 'deg',
+        },
+        { rotateY: parallax.x.value * 2.5 + 'deg' },
+        { translateX: parallax.x.value * 3.5 },
+        { translateY: parallax.y.value * 2.5 },
       ],
     };
   });
@@ -112,6 +124,11 @@ export function NexusPlayerLayer() {
 
   const backdropStyle = useAnimatedStyle(() => ({
     opacity: interpolate(expansion.value, [0, 0.55, 1], [0, 0.6, 1]),
+    transform: [
+      { translateX: parallax.x.value * -9 },
+      { translateY: parallax.y.value * -7 },
+      { scale: 1.035 },
+    ],
   }));
 
   const verticalPan = Gesture.Pan()

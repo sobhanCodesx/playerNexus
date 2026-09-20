@@ -94,6 +94,13 @@ export default function SettingsScreen() {
             onValueChange={(value) => updateSetting('reduceMotion', value)}
             icon={{ ios: 'figure.walk.motion', android: 'motion_photos_off' }}
           />
+          <SettingRow
+            title="Depth motion"
+            subtitle="Use device orientation for subtle artwork parallax"
+            value={settings.depthMotion}
+            onValueChange={(value) => updateSetting('depthMotion', value)}
+            icon={{ ios: 'gyroscope', android: 'screen_rotation' }}
+          />
         </NexusSurface>
       </View>
 
