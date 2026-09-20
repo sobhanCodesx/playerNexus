@@ -89,7 +89,7 @@ export default function HomeScreen() {
       </Pressable>
 
       <View style={styles.section}>
-        <SectionHeader title="Recently played" action={<TinyAction label="All" onPress={() => router.push('/library')} />} />
+        <SectionHeader title="Recently played" action={<TinyAction label="All" onPress={() => router.push('/recent')} />} />
         <View style={styles.coverFlow}>
           {recent.map((track, index) => (
             <Pressable
@@ -132,7 +132,7 @@ export default function HomeScreen() {
 
       <View style={styles.section}>
         <SectionHeader title="Favorites" />
-        <Pressable onPress={() => router.push('/library')}>
+        <Pressable onPress={() => router.push('/favorites')}>
           <View style={styles.favoriteStack}>
             <View style={[styles.stackPlate, styles.stackBack, { backgroundColor: favoritePalette[1] }]} />
             <View style={[styles.stackPlate, styles.stackMid, { backgroundColor: favoritePalette[0] }]} />

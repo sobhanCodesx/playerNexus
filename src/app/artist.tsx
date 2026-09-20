@@ -17,7 +17,9 @@ export default function ArtistScreen() {
   const tracks = player.libraryTracks;
   const artist = artists.find((item) => item.id === params.id) ?? artists[0];
   if (!artist) return null;
-  const topTracks = tracks.filter((track) => track.artist === artist.name);
+  const topTracks = tracks
+    .filter((track) => track.artist === artist.name)
+    .sort((a, b) => (player.playCounts[b.id] ?? 0) - (player.playCounts[a.id] ?? 0) || a.title.localeCompare(b.title));
   const artistAlbums = albums.filter((album) => album.artist === artist.name);
   const { width } = useWindowDimensions();
 
@@ -41,6 +43,18 @@ export default function ArtistScreen() {
         <NexusText variant="caption" muted>{artist.monthlyMood}</NexusText>
       </View>
 
+      <View style={styles.actions}>
+        <Pressable
+          disabled={!topTracks.length}
+          onPress={() => {
+            player.playQueue(topTracks);
+            player.openPlayer();
+          }}
+          style={[styles.play, !topTracks.length && { opacity: 0.35 }]}>
+          <NexusText variant="caption" style={{ color: '#111519' }}>Play artist</NexusText>
+        </Pressable>
+      </View>
+
       <View style={styles.section}>
         <SectionHeader title="Top tracks" />
         {topTracks.map((track,index)=><NexusTrackRow key={track.id} track={track} index={index} />)}
@@ -53,11 +67,20 @@ export default function ArtistScreen() {
         </ScrollView>
       </View>
 
-      <Pressable style={styles.recent}>
-        <NexusText variant="micro" muted>RECENTLY PLAYED</NexusText>
-        <NexusText variant="heading">{topTracks[0]?.title ?? 'Afterlight'}</NexusText>
-        <NexusText muted>Picked up where the last session ended.</NexusText>
-      </Pressable>
+      {player.recentTracks.find((track) => track.artist === artist.name) ? (
+        <Pressable
+          onPress={() => {
+            const recentTrack = player.recentTracks.find((track) => track.artist === artist.name);
+            if (!recentTrack) return;
+            player.playTrack(recentTrack);
+            player.openPlayer();
+          }}
+          style={styles.recent}>
+          <NexusText variant="micro" muted>RECENTLY PLAYED</NexusText>
+          <NexusText variant="heading">{player.recentTracks.find((track) => track.artist === artist.name)?.title}</NexusText>
+          <NexusText muted>Return to your latest session with {artist.name}.</NexusText>
+        </Pressable>
+      ) : null}
     </NexusScreen>
   );
 }
@@ -69,6 +92,8 @@ const styles=StyleSheet.create({
   portraitLight:{position:'absolute',width:'74%',height:'52%',borderRadius:999,top:-20,right:-36,opacity:0.38,transform:[{rotate:'28deg'}]},
   monogram:{fontSize:66,fontWeight:'700',letterSpacing:-4,color:'rgba(255,255,255,0.82)'},
   name:{marginTop:22,textAlign:'center'},
+  actions:{marginTop:24,alignItems:'center'},
+  play:{height:46,borderRadius:23,paddingHorizontal:22,alignItems:'center',justifyContent:'center',backgroundColor:'#F3F5F6'},
   section:{marginTop:32,gap:12},
   albumRail:{gap:16,paddingRight:20},
   recent:{marginTop:34,gap:7,paddingVertical:22,borderTopWidth:StyleSheet.hairlineWidth,borderTopColor:'rgba(255,255,255,0.08)'},
