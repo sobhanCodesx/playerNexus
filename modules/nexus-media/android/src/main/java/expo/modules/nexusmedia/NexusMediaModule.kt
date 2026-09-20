@@ -176,6 +176,76 @@ class NexusMediaModule : Module() {
       waveform
     }
 
+    AsyncFunction("resolveSidecarLyrics") { displayName: String, title: String, folder: String? ->
+      val context = appContext.reactContext
+        ?: throw IllegalStateException("NexusMedia requires an active React context")
+
+      val baseFromFile = displayName.substringBeforeLast('.').trim()
+      val cleanTitle = title.trim()
+      val candidateNames = linkedSetOf<String>()
+      listOf(baseFromFile, cleanTitle).filter { it.isNotBlank() }.forEach { base ->
+        candidateNames.add("$base.lrc")
+        candidateNames.add("$base.LRC")
+        candidateNames.add("$base.txt")
+        candidateNames.add("$base.TXT")
+      }
+
+      val filesCollection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL)
+      } else {
+        MediaStore.Files.getContentUri("external")
+      }
+      val projection = mutableListOf(
+        MediaStore.Files.FileColumns._ID,
+        MediaStore.Files.FileColumns.DISPLAY_NAME
+      )
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        projection.add(MediaStore.MediaColumns.RELATIVE_PATH)
+      }
+
+      var resolvedContent: String? = null
+      var resolvedName: String? = null
+
+      for (candidate in candidateNames) {
+        if (resolvedContent != null) break
+        val selectionParts = mutableListOf("${MediaStore.Files.FileColumns.DISPLAY_NAME} = ? COLLATE NOCASE")
+        val args = mutableListOf(candidate)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && !folder.isNullOrBlank()) {
+          selectionParts.add("${MediaStore.MediaColumns.RELATIVE_PATH} = ?")
+          args.add(folder)
+        }
+
+        try {
+          context.contentResolver.query(
+            filesCollection,
+            projection.toTypedArray(),
+            selectionParts.joinToString(" AND "),
+            args.toTypedArray(),
+            null
+          )?.use { cursor ->
+            if (cursor.moveToFirst()) {
+              val id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID))
+              val name = cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DISPLAY_NAME))
+              val uri = ContentUris.withAppendedId(filesCollection, id)
+              context.contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use { reader ->
+                val text = reader.readText()
+                if (text.isNotBlank() && text.length <= 1_500_000) {
+                  resolvedContent = text
+                  resolvedName = name
+                }
+              }
+            }
+          }
+        } catch (_: Exception) {
+          // Scoped storage can hide arbitrary text sidecars; JS exposes a picker fallback.
+        }
+      }
+
+      mapOf(
+        "content" to resolvedContent,
+        "sourceName" to resolvedName
+      )
+    }
     AsyncFunction("clearArtworkCache") {
       val context = appContext.reactContext
         ?: throw IllegalStateException("NexusMedia requires an active React context")
