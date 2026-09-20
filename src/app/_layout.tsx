@@ -15,7 +15,7 @@ import { NexusSettingsProvider, useNexusSettings } from '@/providers/settings-pr
 function NexusAppShell() {
   const router = useRouter();
   const pathname = usePathname();
-  const { hydrated, settings } = useNexusSettings();
+  const { effectiveReduceMotion, hydrated, settings } = useNexusSettings();
 
   useEffect(() => {
     if (!hydrated) return;
@@ -43,8 +43,8 @@ function NexusAppShell() {
         screenOptions={{
           headerShown: false,
           contentStyle: { backgroundColor: nexusTokens.colors.obsidian },
-          animation: settings.reduceMotion ? 'none' : 'fade',
-          animationDuration: settings.reduceMotion ? 0 : 260,
+          animation: effectiveReduceMotion ? 'none' : 'fade',
+          animationDuration: effectiveReduceMotion ? 0 : 260,
         }}
       />
       <NexusDock />

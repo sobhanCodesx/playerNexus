@@ -64,17 +64,17 @@ export function NexusVisualizerField({
   active: boolean;
   size: number;
 }) {
-  const { settings, effectiveVisualQuality } = useNexusSettings();
+  const { effectiveReduceMotion, effectiveVisualQuality } = useNexusSettings();
   const quality = getNexusQualityProfile(effectiveVisualQuality);
   const drift = useSharedValue(0);
 
   useEffect(() => {
-    if (settings.reduceMotion) {
+    if (effectiveReduceMotion) {
       drift.value = withTiming(0.5, { duration: 180 });
       return;
     }
     drift.value = withRepeat(withTiming(1, { duration: active ? 9000 : 14000 }), -1, true);
-  }, [active, drift, settings.reduceMotion]);
+  }, [active, drift, effectiveReduceMotion]);
 
   const contourSteps =
     effectiveVisualQuality === 'ultra' ? 42 : effectiveVisualQuality === 'low' ? 14 : 24;

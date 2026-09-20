@@ -27,7 +27,9 @@ export function NexusDock() {
           <Pressable
             key={item.path}
             accessibilityRole="tab"
+            accessibilityLabel={item.label}
             accessibilityState={{ selected: active }}
+            hitSlop={4}
             onPress={() => router.replace(item.path)}
             style={styles.item}>
             <View style={[styles.indicator, active && styles.indicatorActive]}>

@@ -46,15 +46,21 @@ export function NexusText({
   style,
   ...props
 }: TextProps & { variant?: keyof typeof nexusTokens.type; muted?: boolean }) {
-  const { settings } = useNexusSettings();
+  const { settings, highTextContrastEnabled } = useNexusSettings();
   const light = settings.themeMode === 'light';
   return (
     <Text
       {...props}
       allowFontScaling
-      maxFontSizeMultiplier={1.35}
+      maxFontSizeMultiplier={variant === 'display' ? 1.6 : 2}
       style={[
-        { color: muted ? (light ? '#6D7378' : nexusTokens.colors.muted) : (light ? '#15191D' : nexusTokens.colors.white) },
+        {
+          color: highTextContrastEnabled
+            ? (light ? '#0C0F12' : '#FFFFFF')
+            : muted
+              ? (light ? '#6D7378' : nexusTokens.colors.muted)
+              : (light ? '#15191D' : nexusTokens.colors.white),
+        },
         nexusTokens.type[variant] as TextStyle,
         style,
       ]}
@@ -67,25 +73,35 @@ export function NexusSurface({
   style,
   intensity = 'medium',
 }: PropsWithChildren<{ style?: StyleProp<ViewStyle>; intensity?: 'soft' | 'medium' | 'strong' }>) {
-  const { settings, effectiveVisualQuality } = useNexusSettings();
+  const { settings, effectiveVisualQuality, highTextContrastEnabled } = useNexusSettings();
   const light = settings.themeMode === 'light';
   const quality = getNexusQualityProfile(effectiveVisualQuality);
   const alpha = intensity === 'soft' ? 0.045 : intensity === 'strong' ? 0.11 : 0.075;
   const baseBlur = intensity === 'soft' ? 10 : intensity === 'strong' ? 24 : 16;
-  const blur = Math.round(baseBlur * (quality.visualizerBlurScale < 0.7 ? 0.72 : 1));
+  const blur = highTextContrastEnabled
+    ? 0
+    : Math.round(baseBlur * (quality.visualizerBlurScale < 0.7 ? 0.72 : 1));
   return (
     <View
       style={[
         styles.surface,
         {
-          backgroundColor: light
-            ? 'rgba(255,255,255,' + (0.5 + alpha) + ')'
-            : 'rgba(12,16,20,' + (0.48 + alpha) + ')',
-          borderColor: light ? 'rgba(20,24,28,0.08)' : 'rgba(255,255,255,0.11)',
+          backgroundColor: highTextContrastEnabled
+            ? (light ? 'rgba(255,255,255,0.96)' : 'rgba(8,11,14,0.96)')
+            : light
+              ? 'rgba(255,255,255,' + (0.5 + alpha) + ')'
+              : 'rgba(12,16,20,' + (0.48 + alpha) + ')',
+          borderColor: highTextContrastEnabled
+            ? (light ? 'rgba(15,18,20,0.24)' : 'rgba(255,255,255,0.28)')
+            : light
+              ? 'rgba(20,24,28,0.08)'
+              : 'rgba(255,255,255,0.11)',
         },
         style,
       ]}>
-      <BlurView pointerEvents="none" intensity={blur} tint={light ? 'light' : 'dark'} style={StyleSheet.absoluteFill} />
+      {blur > 0 ? (
+        <BlurView pointerEvents="none" intensity={blur} tint={light ? 'light' : 'dark'} style={StyleSheet.absoluteFill} />
+      ) : null}
       <View
         pointerEvents="none"
         style={[
@@ -140,6 +156,7 @@ export function NexusIconButton({
   active?: boolean;
   accent?: string;
 }) {
+  const { effectiveReduceMotion } = useNexusSettings();
   const pressed = useSharedValue(0);
   const animated = useAnimatedStyle(() => ({
     transform: [{ scale: interpolate(pressed.value, [0, 1], [1, 0.91]) }],
@@ -149,11 +166,17 @@ export function NexusIconButton({
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel}
+        accessibilityState={{ selected: active }}
+        hitSlop={6}
         onPressIn={() => {
-          pressed.value = withSpring(1, { damping: 18, stiffness: 260 });
+          pressed.value = effectiveReduceMotion
+            ? withTiming(0, { duration: 0 })
+            : withSpring(1, { damping: 18, stiffness: 260 });
         }}
         onPressOut={() => {
-          pressed.value = withSpring(0, { damping: 16, stiffness: 220 });
+          pressed.value = effectiveReduceMotion
+            ? withTiming(0, { duration: 0 })
+            : withSpring(0, { damping: 16, stiffness: 220 });
         }}
         onPress={() => {
           if (primary) nexusHaptics.play();
@@ -193,17 +216,17 @@ export function NexusArtwork({
   active?: boolean;
   style?: StyleProp<ViewStyle>;
 }>) {
-  const { settings } = useNexusSettings();
+  const { effectiveReduceMotion } = useNexusSettings();
   const pulse = useSharedValue(0);
   useEffect(() => {
-    if (settings.reduceMotion) {
+    if (effectiveReduceMotion) {
       pulse.value = withTiming(0, { duration: 180 });
       return;
     }
     pulse.value = active
       ? withRepeat(withSequence(withTiming(1, { duration: 1800 }), withTiming(0, { duration: 2200 })), -1, false)
       : withTiming(0, { duration: 500 });
-  }, [active, pulse, settings.reduceMotion]);
+  }, [active, effectiveReduceMotion, pulse]);
 
   const animated = useAnimatedStyle(() => ({
     transform: [
@@ -261,13 +284,13 @@ export function NexusAura({
   size?: number;
   style?: StyleProp<ViewStyle>;
 }) {
-  const { settings, effectiveVisualQuality } = useNexusSettings();
+  const { effectiveReduceMotion, effectiveVisualQuality } = useNexusSettings();
   const quality = getNexusQualityProfile(effectiveVisualQuality);
   const phase = useSharedValue(0);
   const bass = useSharedValue(bands.bass);
   const mid = useSharedValue(bands.mid);
   useEffect(() => {
-    if (settings.reduceMotion) {
+    if (effectiveReduceMotion) {
       phase.value = withTiming(0.5, { duration: 180 });
       return;
     }
@@ -279,7 +302,7 @@ export function NexusAura({
       -1,
       true,
     );
-  }, [active, phase, settings.reduceMotion]);
+  }, [active, effectiveReduceMotion, phase]);
   useEffect(() => {
     bass.value = withTiming(bands.bass, { duration: 90 });
     mid.value = withTiming(bands.mid, { duration: 130 });
@@ -393,11 +416,11 @@ export function NexusOrb({
   bands?: AudioBands;
   size?: number;
 }) {
-  const { settings, effectiveVisualQuality } = useNexusSettings();
+  const { effectiveReduceMotion, effectiveVisualQuality } = useNexusSettings();
   const quality = getNexusQualityProfile(effectiveVisualQuality);
   const idle = useSharedValue(0);
   useEffect(() => {
-    if (settings.reduceMotion) {
+    if (effectiveReduceMotion) {
       idle.value = withTiming(0.5, { duration: 180 });
       return;
     }
@@ -409,7 +432,7 @@ export function NexusOrb({
       -1,
       false,
     );
-  }, [active, idle, settings.reduceMotion]);
+  }, [active, effectiveReduceMotion, idle]);
 
   const pathSteps =
     effectiveVisualQuality === 'ultra' ? 48 : effectiveVisualQuality === 'low' ? 16 : 28;
@@ -554,7 +577,31 @@ export function NexusWaveform({
   };
 
   return (
-    <View style={styles.waveformShell} onLayout={onLayout} {...responder.panHandlers}>
+    <View
+      accessible
+      accessibilityRole="adjustable"
+      accessibilityLabel="Playback position"
+      accessibilityValue={{
+        min: 0,
+        max: 100,
+        now: Math.round(displayed * 100),
+        text: formatSeekTime(displayed * duration) + ' of ' + formatSeekTime(duration),
+      }}
+      accessibilityActions={[
+        { name: 'increment', label: 'Seek forward' },
+        { name: 'decrement', label: 'Seek backward' },
+      ]}
+      onAccessibilityAction={(event) => {
+        const step = duration > 0 ? Math.min(0.1, 10 / duration) : 0.05;
+        if (event.nativeEvent.actionName === 'increment') {
+          onSeek(Math.min(1, displayed + step));
+        } else if (event.nativeEvent.actionName === 'decrement') {
+          onSeek(Math.max(0, displayed - step));
+        }
+      }}
+      style={styles.waveformShell}
+      onLayout={onLayout}
+      {...responder.panHandlers}>
       {scrubbing ? (
         <View
           pointerEvents="none"

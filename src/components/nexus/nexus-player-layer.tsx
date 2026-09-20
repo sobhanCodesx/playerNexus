@@ -44,7 +44,7 @@ function formatTime(seconds: number) {
 export function NexusPlayerLayer() {
   const player = usePlayer();
   const collections = useNexusCollections();
-  const { settings } = useNexusSettings();
+  const { effectiveReduceMotion, settings } = useNexusSettings();
   const [quickActionsOpen, setQuickActionsOpen] = useState(false);
   const [playlistMode, setPlaylistMode] = useState(false);
   const router = useRouter();
@@ -54,7 +54,7 @@ export function NexusPlayerLayer() {
   const expansion = useSharedValue(player.expanded ? 1 : 0);
   const playPulse = useSharedValue(0);
   const parallax = useNexusDeviceParallax(
-    player.expanded && settings.depthMotion && !settings.reduceMotion,
+    player.expanded && settings.depthMotion && !effectiveReduceMotion,
   );
   const gestureStart = useSharedValue(0);
   const openQueue = () => {
@@ -84,21 +84,23 @@ export function NexusPlayerLayer() {
   };
 
   useEffect(() => {
-    expansion.value = withSpring(player.expanded ? 1 : 0, {
-      damping: player.expanded ? 24 : 28,
-      stiffness: player.expanded ? 150 : 210,
-      mass: 0.85,
-    });
-  }, [player.expanded, expansion]);
+    expansion.value = effectiveReduceMotion
+      ? withTiming(player.expanded ? 1 : 0, { duration: 0 })
+      : withSpring(player.expanded ? 1 : 0, {
+          damping: player.expanded ? 24 : 28,
+          stiffness: player.expanded ? 150 : 210,
+          mass: 0.85,
+        });
+  }, [effectiveReduceMotion, player.expanded, expansion]);
 
   useEffect(() => {
-    if (player.isPlaying) {
+    if (player.isPlaying && !effectiveReduceMotion) {
       playPulse.value = withSequence(
         withTiming(1, { duration: 280, easing: Easing.out(Easing.cubic) }),
         withTiming(0, { duration: 760, easing: Easing.out(Easing.quad) }),
       );
     }
-  }, [player.isPlaying, playPulse]);
+  }, [effectiveReduceMotion, player.isPlaying, playPulse]);
 
   const shellStyle = useAnimatedStyle(() => ({
     left: interpolate(expansion.value, [0, 1], [14, 0]),
