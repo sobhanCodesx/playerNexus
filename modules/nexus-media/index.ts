@@ -1,2 +1,6 @@
-export { default } from './src/NexusMediaModule';
-export type { NativeMusicTrack, ResolvedArtwork } from './src/NexusMediaModule';
+export { default, isNexusMediaAvailable } from './src/NexusMediaModule';
+export type {
+  NativeMusicTrack,
+  NexusMediaNativeModule,
+  ResolvedArtwork,
+} from './src/NexusMediaModule';
