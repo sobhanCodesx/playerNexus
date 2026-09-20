@@ -129,14 +129,17 @@ export default function LibraryScreen() {
       if (permission === 'granted') return;
 
       const buildProblem =
-        diagnostics?.nativeScanner === false || diagnostics?.declared === false;
+        diagnostics?.expoGo === false &&
+        (diagnostics?.nativeScanner === false || diagnostics?.declared === false);
       const detail = diagnostics
         ? [
             'Android SDK ' + diagnostics.sdkInt,
             diagnostics.permission.split('.').pop(),
             'declared: ' + (diagnostics.declared === null ? 'unknown' : diagnostics.declared ? 'yes' : 'NO'),
             'granted: ' + (diagnostics.granted ? 'yes' : 'no'),
-            'native scanner: ' + (diagnostics.nativeScanner ? 'yes' : 'NO'),
+            diagnostics.expoGo
+              ? 'runtime: Expo Go audio fallback'
+              : 'native scanner: ' + (diagnostics.nativeScanner ? 'yes' : 'NO'),
           ].join(' · ')
         : 'Permission request returned ' + permission + '.';
 
@@ -276,9 +279,11 @@ export default function LibraryScreen() {
         <NexusSurface style={styles.permission} intensity="strong">
           <View style={{ flex: 1, gap: 3 }}>
             <NexusText variant="caption">
-              {musicDiagnostics?.nativeScanner === false
-                ? 'Native music scanner is missing'
-                : musicDiagnostics?.declared === false
+              {musicDiagnostics?.expoGo
+                ? 'Expo Go audio library'
+                : musicDiagnostics?.nativeScanner === false
+                  ? 'Native music scanner is missing'
+                  : musicDiagnostics?.declared === false
                   ? 'Audio permission is missing from this build'
                   : player.libraryPermission === 'blocked'
                     ? 'Music access is blocked'
@@ -294,7 +299,11 @@ export default function LibraryScreen() {
                       : musicDiagnostics.declared
                         ? 'MANIFEST YES'
                         : 'MANIFEST NO',
-                    musicDiagnostics.nativeScanner ? 'NATIVE YES' : 'NATIVE NO',
+                    musicDiagnostics.expoGo
+                      ? 'EXPO GO'
+                      : musicDiagnostics.nativeScanner
+                        ? 'NATIVE YES'
+                        : 'NATIVE NO',
                   ].join(' · ')
                 : player.libraryStatus === 'error'
                   ? 'SCAN FAILED · TAP TO DIAGNOSE'

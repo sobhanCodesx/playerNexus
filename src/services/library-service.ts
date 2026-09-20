@@ -1,4 +1,5 @@
 import { PermissionsAndroid, Platform } from 'react-native';
+import Constants from 'expo-constants';
 import * as MediaLibrary from 'expo-media-library/legacy';
 
 import NexusMedia, {
@@ -16,6 +17,7 @@ export type MusicAccessDiagnosticSnapshot = {
   declared: boolean | null;
   granted: boolean;
   nativeScanner: boolean;
+  expoGo: boolean;
 };
 
 const formatDuration = (milliseconds: number) => {
@@ -110,6 +112,8 @@ async function scanWithExpoMediaLibrary(limit: number): Promise<Track[]> {
   return result;
 }
 
+const isExpoGo = Constants.appOwnership === 'expo';
+
 const androidAudioPermission = () =>
   Number(Platform.Version) >= 33
     ? PermissionsAndroid.PERMISSIONS.READ_MEDIA_AUDIO
@@ -119,6 +123,13 @@ export async function getMusicPermission(): Promise<LibraryPermission> {
   if (Platform.OS !== 'android') return 'granted';
 
   try {
+    if (isExpoGo) {
+      const response = await MediaLibrary.getPermissionsAsync(false, ['audio']);
+      if (response.granted) return 'granted';
+      if (response.canAskAgain === false) return 'blocked';
+      return response.status === 'undetermined' ? 'undetermined' : 'denied';
+    }
+
     const permission = androidAudioPermission();
     const nativeGranted = await PermissionsAndroid.check(permission);
     if (nativeGranted) return 'granted';
@@ -136,6 +147,13 @@ export async function requestMusicPermission(): Promise<LibraryPermission> {
   if (Platform.OS !== 'android') return 'granted';
 
   try {
+    if (isExpoGo) {
+      const response = await MediaLibrary.requestPermissionsAsync(false, ['audio']);
+      if (response.granted) return 'granted';
+      if (response.canAskAgain === false) return 'blocked';
+      return response.status === 'undetermined' ? 'undetermined' : 'denied';
+    }
+
     const permission = androidAudioPermission();
     const nativeResult = await PermissionsAndroid.request(permission);
 
@@ -171,6 +189,7 @@ export async function getMusicAccessDiagnostics(): Promise<MusicAccessDiagnostic
         declared: native.declared,
         granted: native.granted,
         nativeScanner: true,
+        expoGo: false,
       };
     } catch {
       // Keep the JS diagnostics path available for stale dev clients.
@@ -180,9 +199,10 @@ export async function getMusicAccessDiagnostics(): Promise<MusicAccessDiagnostic
   return {
     sdkInt: Platform.OS === 'android' ? Number(Platform.Version) : 0,
     permission,
-    declared: null,
+    declared: isExpoGo ? true : null,
     granted,
     nativeScanner: false,
+    expoGo: isExpoGo,
   };
 }
 
