@@ -83,6 +83,8 @@ type PlayerContextValue = {
   toggleRepeat: () => void;
   playNext: (track: Track) => void;
   addToQueue: (track: Track) => void;
+  removeFromQueue: (trackId: string) => void;
+  clearUpcoming: () => void;
   moveQueueItem: (from: number, to: number) => void;
   scanLibrary: (requestPermission?: boolean) => Promise<void>;
   enableAudioReactive: () => Promise<boolean>;
@@ -860,6 +862,22 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     },
     addToQueue: (item) => {
       setQueue((current) => current.some((entry) => entry.id === item.id) ? current : [...current, item]);
+    },
+    removeFromQueue: (trackId) => {
+      if (trackId === track.id) return;
+      setQueue((current) => {
+        const nextQueue = current.filter((entry) => entry.id !== trackId);
+        const activeIndex = nextQueue.findIndex((entry) => entry.id === track.id);
+        if (activeIndex >= 0) setCurrentIndex(activeIndex);
+        return nextQueue;
+      });
+    },
+    clearUpcoming: () => {
+      setQueue((current) => {
+        const activeIndex = current.findIndex((entry) => entry.id === track.id);
+        if (activeIndex < 0) return current;
+        return current.slice(0, activeIndex + 1);
+      });
     },
     moveQueueItem: (from, to) => {
       const activeId = track.id;
