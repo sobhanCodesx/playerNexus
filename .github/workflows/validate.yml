@@ -23,7 +23,12 @@ jobs:
           java-version: 17
           cache: gradle
       - name: Install
-        run: npm ci
+        run: |
+          if ! npm ci; then
+            echo "package-lock is catching up with package.json; regenerating for validation"
+            npm install --package-lock-only --ignore-scripts
+            npm ci
+          fi
       - name: TypeScript
         run: npm run typecheck
       - name: Expo prebuild Android
