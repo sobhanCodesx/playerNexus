@@ -106,6 +106,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const audioStatus = useAudioPlayerStatus(audioPlayer);
   const analyzer = useRef(createNexusAudioAnalyzer());
   const lastBandUpdate = useRef(0);
+  const lastPublishedBands = useRef<AudioBands>(silentBands);
   const playIntent = useRef(false);
   const notificationAsked = useRef(false);
   const transitionPlayer = useRef<ReturnType<typeof createAudioPlayer> | null>(null);
@@ -173,6 +174,9 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const progress = isRealTrack && duration > 0
     ? Math.max(0, Math.min(1, audioStatus.currentTime / duration))
     : demoProgress;
+  const theme = useMemo(() => deriveNexusTheme(track.palette), [track.palette]);
+  const openPlayer = useCallback(() => setExpanded(true), []);
+  const closePlayer = useCallback(() => setExpanded(false), []);
 
   const libraryTracks = deviceTracks.length ? deviceTracks : demoTracks;
   const libraryAlbums = useMemo(() => deriveAlbums(libraryTracks), [libraryTracks]);
@@ -344,7 +348,25 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     const now = Date.now();
     if (now - lastBandUpdate.current < quality.sampleIntervalMs) return;
     lastBandUpdate.current = now;
-    setAudioBands(analyzer.current(sample));
+
+    const next = analyzer.current(sample);
+    const previous = lastPublishedBands.current;
+    const threshold =
+      settings.visualQuality === 'low'
+        ? 0.055
+        : settings.visualQuality === 'ultra'
+          ? 0.018
+          : 0.032;
+    const delta = Math.max(
+      Math.abs(next.bass - previous.bass),
+      Math.abs(next.mid - previous.mid),
+      Math.abs(next.high - previous.high),
+      Math.abs(next.rms - previous.rms),
+    );
+
+    if (delta < threshold && next.transient < 0.16 && previous.transient < 0.16) return;
+    lastPublishedBands.current = next;
+    setAudioBands(next);
   });
 
   useEffect(() => {
@@ -854,7 +876,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     duration,
     expanded,
     favorite: favorites.has(track.id),
-    theme: deriveNexusTheme(track.palette),
+    theme,
     audioBands,
     waveform,
     audioReactiveEnabled,
@@ -865,8 +887,8 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     next,
     previous,
     seek,
-    openPlayer: () => setExpanded(true),
-    closePlayer: () => setExpanded(false),
+    openPlayer,
+    closePlayer,
     toggleFavorite: () => {
       setFavorites((current) => {
         const copy = new Set(current);
@@ -946,6 +968,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     duration,
     expanded,
     favorites,
+    theme,
     audioBands,
     waveform,
     audioReactiveEnabled,
@@ -956,6 +979,8 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     next,
     previous,
     seek,
+    openPlayer,
+    closePlayer,
     scanLibrary,
     enableAudioReactive,
     hydrateArtworkWindow,
