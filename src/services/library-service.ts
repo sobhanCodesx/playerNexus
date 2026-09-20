@@ -1,7 +1,10 @@
 import { Platform } from 'react-native';
 import * as MediaLibrary from 'expo-media-library/legacy';
 
-import NexusMedia, { type NativeMusicTrack } from '../../modules/nexus-media';
+import NexusMedia, {
+  isNexusMediaAvailable,
+  type NativeMusicTrack,
+} from '../../modules/nexus-media';
 import type { Track } from '@/data/library';
 import type { NexusPalette } from '@/design/nexus-tokens';
 
@@ -52,6 +55,51 @@ const mapNativeTrack = (track: NativeMusicTrack): Track => ({
   source: 'device',
 });
 
+const cleanFilename = (filename: string) =>
+  filename.replace(/\.[a-z0-9]{1,6}$/i, '').replace(/[_-]+/g, ' ').trim() || 'Unknown track';
+
+const mapExpoAsset = (asset: MediaLibrary.Asset): Track => {
+  const title = cleanFilename(asset.filename);
+  const albumId = asset.albumId ?? 'local-files';
+  const durationMs = Math.max(0, Math.round((asset.duration ?? 0) * 1000));
+  return {
+    id: 'device:' + asset.id,
+    nativeId: asset.id,
+    uri: asset.uri,
+    title,
+    artist: 'Unknown artist',
+    album: 'Local files',
+    albumId,
+    duration: formatDuration(durationMs),
+    durationMs,
+    year: 0,
+    dateAdded: asset.creationTime || asset.modificationTime || Date.now(),
+    palette: fallbackPalette(albumId + title),
+    source: 'device',
+  };
+};
+
+async function scanWithExpoMediaLibrary(limit: number): Promise<Track[]> {
+  const result: Track[] = [];
+  let after: string | undefined;
+
+  while (result.length < limit) {
+    const page = await MediaLibrary.getAssetsAsync({
+      mediaType: MediaLibrary.MediaType.audio,
+      first: Math.min(500, limit - result.length),
+      after,
+      sortBy: [[MediaLibrary.SortBy.creationTime, false]],
+    });
+
+    result.push(...page.assets.map(mapExpoAsset));
+
+    if (!page.hasNextPage || !page.endCursor) break;
+    after = page.endCursor;
+  }
+
+  return result;
+}
+
 export async function getMusicPermission(): Promise<LibraryPermission> {
   if (Platform.OS !== 'android') return 'granted';
   const response = await MediaLibrary.getPermissionsAsync(false, ['audio']);
@@ -68,16 +116,41 @@ export async function requestMusicPermission(): Promise<LibraryPermission> {
 
 export async function scanDeviceMusic(limit = 5000): Promise<Track[]> {
   if (Platform.OS !== 'android') return [];
-  const result = await NexusMedia.scanMusic(limit);
-  return result.map(mapNativeTrack);
+
+  if (isNexusMediaAvailable && NexusMedia) {
+    try {
+      const result = await NexusMedia.scanMusic(limit);
+      return result.map(mapNativeTrack);
+    } catch {
+      // A stale development build can expose the module but still fail at runtime.
+      // Falling back keeps Nexus usable while the native client is rebuilt.
+    }
+  }
+
+  return scanWithExpoMediaLibrary(limit);
 }
 
 export async function resolveTrackArtwork(track: Track) {
-  if (Platform.OS !== 'android' || !track.uri || track.source !== 'device') {
+  if (
+    Platform.OS !== 'android' ||
+    !track.uri ||
+    track.source !== 'device' ||
+    !isNexusMediaAvailable ||
+    !NexusMedia
+  ) {
     return { artworkUri: track.artworkUri ?? null, palette: track.palette };
   }
-  const resolved = await NexusMedia.resolveArtwork(track.uri, track.albumId || track.id);
-  const colors = resolved.palette.filter((color) => /^#[0-9a-f]{6}$/i.test(color));
-  const palette = (colors.length >= 3 ? colors : track.palette) as NexusPalette;
-  return { artworkUri: resolved.artworkUri, palette };
+
+  try {
+    const resolved = await NexusMedia.resolveArtwork(track.uri, track.albumId || track.id);
+    const colors = resolved.palette.filter((color) => /^#[0-9a-f]{6}$/i.test(color));
+    const palette = (colors.length >= 3 ? colors : track.palette) as NexusPalette;
+    return { artworkUri: resolved.artworkUri, palette };
+  } catch {
+    return { artworkUri: track.artworkUri ?? null, palette: track.palette };
+  }
+}
+
+export function hasEnhancedNativeLibrary() {
+  return isNexusMediaAvailable;
 }

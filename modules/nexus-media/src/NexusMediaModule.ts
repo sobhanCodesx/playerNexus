@@ -1,4 +1,4 @@
-import { requireNativeModule } from 'expo-modules-core';
+import { requireOptionalNativeModule } from 'expo-modules-core';
 
 export type NativeMusicTrack = {
   id: string;
@@ -18,10 +18,13 @@ export type ResolvedArtwork = {
   palette: string[];
 };
 
-type NexusMediaNativeModule = {
+export type NexusMediaNativeModule = {
   scanMusic(limit: number): Promise<NativeMusicTrack[]>;
   resolveArtwork(uri: string, cacheKey: string): Promise<ResolvedArtwork>;
   clearArtworkCache(): Promise<void>;
 };
 
-export default requireNativeModule<NexusMediaNativeModule>('NexusMedia');
+const NexusMedia = requireOptionalNativeModule<NexusMediaNativeModule>('NexusMedia');
+
+export const isNexusMediaAvailable = NexusMedia !== null;
+export default NexusMedia;
