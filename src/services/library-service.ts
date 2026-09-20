@@ -51,6 +51,7 @@ const mapNativeTrack = (track: NativeMusicTrack): Track => ({
   year: 0,
   dateAdded: track.dateAdded,
   folder: track.folder ?? undefined,
+  displayName: track.displayName,
   palette: fallbackPalette(track.albumId || track.title),
   source: 'device',
 });
@@ -74,6 +75,7 @@ const mapExpoAsset = (asset: MediaLibrary.Asset): Track => {
     durationMs,
     year: 0,
     dateAdded: asset.creationTime || asset.modificationTime || Date.now(),
+    displayName: asset.filename,
     palette: fallbackPalette(albumId + title),
     source: 'device',
   };

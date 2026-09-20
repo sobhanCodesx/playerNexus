@@ -17,6 +17,7 @@ export type Track = {
   artworkUri?: string | null;
   dateAdded?: number;
   folder?: string;
+  displayName?: string;
 };
 
 export type Album = {

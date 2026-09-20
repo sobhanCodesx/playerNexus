@@ -3,4 +3,5 @@ export type {
   NativeMusicTrack,
   NexusMediaNativeModule,
   ResolvedArtwork,
+  ResolvedLyricsSidecar,
 } from './src/NexusMediaModule';

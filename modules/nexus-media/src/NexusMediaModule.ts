@@ -18,10 +18,16 @@ export type ResolvedArtwork = {
   palette: string[];
 };
 
+export type ResolvedLyricsSidecar = {
+  content: string | null;
+  sourceName: string | null;
+};
+
 export type NexusMediaNativeModule = {
   scanMusic(limit: number): Promise<NativeMusicTrack[]>;
   resolveArtwork(uri: string, cacheKey: string): Promise<ResolvedArtwork>;
   extractWaveform(uri: string, cacheKey: string, bucketCount: number): Promise<number[]>;
+  resolveSidecarLyrics(displayName: string, title: string, folder: string | null): Promise<ResolvedLyricsSidecar>;
   clearArtworkCache(): Promise<void>;
 };
 
