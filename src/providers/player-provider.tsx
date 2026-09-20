@@ -67,6 +67,7 @@ type PlayerContextValue = {
   waveform: number[];
   audioReactiveEnabled: boolean;
   playTrack: (track: Track) => void;
+  playQueue: (tracks: Track[], startTrackId?: string) => void;
   togglePlayback: () => void;
   next: () => void;
   previous: () => void;
@@ -145,7 +146,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     ? Math.max(0, Math.min(1, audioStatus.currentTime / duration))
     : demoProgress;
 
-  const libraryTracks = deviceTracks.length ? deviceTracks : queue;
+  const libraryTracks = deviceTracks.length ? deviceTracks : demoTracks;
   const libraryAlbums = useMemo(() => deriveAlbums(libraryTracks), [libraryTracks]);
   const libraryArtists = useMemo(() => deriveArtists(libraryTracks), [libraryTracks]);
   const recentTracks = useMemo(() => {
@@ -466,6 +467,19 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     if (!nextTrack.uri) setDemoPlaying(true);
   }, [audioPlayer, currentIndex, ensureNotificationPermission, queue]);
 
+  const playQueue = useCallback((tracks: Track[], startTrackId?: string) => {
+    if (!tracks.length) return;
+    const startIndex = Math.max(
+      0,
+      startTrackId ? tracks.findIndex((item) => item.id === startTrackId) : 0,
+    );
+    playIntent.current = true;
+    setQueue(tracks);
+    setCurrentIndex(startIndex);
+    setDemoProgress(0);
+    if (!tracks[startIndex]?.uri) setDemoPlaying(true);
+  }, []);
+
   const togglePlayback = useCallback(() => {
     if (isRealTrack) {
       if (audioStatus.playing) {
@@ -550,6 +564,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     waveform,
     audioReactiveEnabled,
     playTrack,
+    playQueue,
     togglePlayback,
     next,
     previous,
@@ -604,6 +619,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     waveform,
     audioReactiveEnabled,
     playTrack,
+    playQueue,
     togglePlayback,
     next,
     previous,

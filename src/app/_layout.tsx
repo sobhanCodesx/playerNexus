@@ -9,6 +9,7 @@ import { NexusDock } from '@/components/nexus/nexus-dock';
 import { NexusPlayerLayer } from '@/components/nexus/nexus-player-layer';
 import { nexusTokens } from '@/design/nexus-tokens';
 import { PlayerProvider } from '@/providers/player-provider';
+import { NexusCollectionsProvider } from '@/providers/collections-provider';
 import { NexusSettingsProvider, useNexusSettings } from '@/providers/settings-provider';
 
 function NexusAppShell() {
@@ -57,9 +58,11 @@ export default function RootLayout() {
     <GestureHandlerRootView style={styles.root}>
       <SafeAreaProvider>
         <NexusSettingsProvider>
-          <PlayerProvider>
-            <NexusAppShell />
-          </PlayerProvider>
+          <NexusCollectionsProvider>
+            <PlayerProvider>
+              <NexusAppShell />
+            </PlayerProvider>
+          </NexusCollectionsProvider>
         </NexusSettingsProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
