@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Easing,
@@ -36,6 +36,7 @@ function formatTime(seconds: number) {
 export function NexusPlayerLayer() {
   const player = usePlayer();
   const router = useRouter();
+  const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const expansion = useSharedValue(player.expanded ? 1 : 0);
@@ -165,6 +166,8 @@ export function NexusPlayerLayer() {
     });
 
   const artworkGesture = Gesture.Exclusive(favoriteTap, longPress, artworkSwipe);
+
+  if (pathname === '/visualizer') return null;
 
   return (
     <GestureDetector gesture={verticalPan}>
