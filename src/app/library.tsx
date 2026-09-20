@@ -2,11 +2,11 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 
-import { albums, artists, tracks } from '@/data/library';
 import { nexusTokens } from '@/design/nexus-tokens';
 import { NexusAlbumTile, NexusArtistBubble, NexusTrackRow } from '@/components/nexus/nexus-cards';
 import { NexusIcon, NexusSurface, NexusText } from '@/components/nexus/nexus-primitives';
 import { NexusScreen } from '@/components/nexus/nexus-screen';
+import { usePlayer } from '@/providers/player-provider';
 
 const tabs = ['Songs', 'Albums', 'Artists', 'Playlists', 'Folders'] as const;
 type Tab = (typeof tabs)[number];
@@ -14,6 +14,10 @@ type Tab = (typeof tabs)[number];
 export default function LibraryScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
+  const player = usePlayer();
+  const tracks = player.libraryTracks;
+  const albums = player.libraryAlbums;
+  const artists = player.libraryArtists;
   const [tab, setTab] = useState<Tab>('Songs');
   const [sort, setSort] = useState('Recently added');
   const albumWidth = Math.min(164, (width - 56) / 2);
@@ -41,6 +45,18 @@ export default function LibraryScreen() {
           </Pressable>
         ))}
       </ScrollView>
+
+      {player.libraryStatus === 'permission' || player.libraryStatus === 'error' ? (
+        <NexusSurface style={styles.permission} intensity="strong">
+          <View style={{ flex: 1, gap: 3 }}>
+            <NexusText variant="caption">Scan the Android music library</NexusText>
+            <NexusText variant="micro" muted>FILES STAY ON THIS DEVICE</NexusText>
+          </View>
+          <Pressable onPress={() => player.scanLibrary(true)} style={styles.permissionAction}>
+            <NexusText variant="micro" style={{ color: '#111519' }}>ALLOW</NexusText>
+          </Pressable>
+        </NexusSurface>
+      ) : null}
 
       <View style={styles.utilityRow}>
         <NexusText variant="caption" muted>
@@ -92,6 +108,8 @@ const styles=StyleSheet.create({
   tabs:{gap:8,paddingRight:20},
   tab:{height:36,paddingHorizontal:14,borderRadius:18,alignItems:'center',justifyContent:'center',backgroundColor:'rgba(255,255,255,0.035)'},
   tabActive:{backgroundColor:'rgba(255,255,255,0.11)'},
+  permission:{minHeight:68,borderRadius:22,paddingHorizontal:14,flexDirection:'row',alignItems:'center',gap:12,marginTop:16},
+  permissionAction:{height:36,borderRadius:18,paddingHorizontal:14,alignItems:'center',justifyContent:'center',backgroundColor:'#F4F6F7'},
   utilityRow:{height:54,flexDirection:'row',alignItems:'center',justifyContent:'space-between'},
   sort:{flexDirection:'row',alignItems:'center',gap:5,paddingVertical:8},
   list:{marginTop:2},

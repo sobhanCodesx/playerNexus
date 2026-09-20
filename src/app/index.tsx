@@ -1,7 +1,6 @@
 import { Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 
-import { albums, artists, tracks } from '@/data/library';
 import { nexusTokens } from '@/design/nexus-tokens';
 import { usePlayer } from '@/providers/player-provider';
 import { NexusAlbumTile, NexusArtistBubble, TinyAction } from '@/components/nexus/nexus-cards';
@@ -19,6 +18,9 @@ export default function HomeScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const player = usePlayer();
+  const tracks = player.libraryTracks;
+  const albums = player.libraryAlbums;
+  const artists = player.libraryArtists;
   const artSize = Math.min(width - 72, 292);
   const albumWidth = Math.min(164, (width - 56) / 2);
 
@@ -38,6 +40,18 @@ export default function HomeScreen() {
         />
       </View>
 
+      {player.libraryStatus === 'permission' ? (
+        <NexusSurface style={styles.libraryGate} intensity="strong">
+          <View style={{ flex: 1, gap: 4 }}>
+            <NexusText variant="caption">Your music is still outside Nexus</NexusText>
+            <NexusText variant="micro" muted>GRANT AUDIO ACCESS · LOCAL ONLY</NexusText>
+          </View>
+          <Pressable onPress={() => player.scanLibrary(true)} style={styles.scanButton}>
+            <NexusText variant="micro" style={{ color: '#111519' }}>SCAN MUSIC</NexusText>
+          </Pressable>
+        </NexusSurface>
+      ) : null}
+
       <Pressable
         onPress={player.openPlayer}
         accessibilityRole="button"
@@ -47,6 +61,7 @@ export default function HomeScreen() {
           <View style={[styles.heroHalo, { backgroundColor: player.track.palette[0] }]} />
           <NexusArtwork
             palette={player.track.palette}
+            artworkUri={player.track.artworkUri}
             size={artSize}
             active={player.isPlaying}
             style={styles.heroArtwork}
@@ -83,7 +98,7 @@ export default function HomeScreen() {
                 index === 1 && { zIndex: 3, transform: [{ translateY: -8 }] },
                 index === 2 && { transform: [{ rotate: '5deg' }, { translateX: -10 }, { scale: 0.91 }], opacity: 0.68 },
               ]}>
-              <NexusArtwork palette={track.palette} size={118} radius={24} />
+              <NexusArtwork palette={track.palette} artworkUri={track.artworkUri} size={118} radius={24} />
               {index === 1 && (
                 <View style={styles.flowLabel}>
                   <NexusText variant="caption" numberOfLines={1}>{track.title}</NexusText>
@@ -146,6 +161,23 @@ const styles = StyleSheet.create({
     marginBottom: 22,
   },
   eyebrow: { marginBottom: 5, letterSpacing: 1.2 },
+  libraryGate: {
+    minHeight: 68,
+    borderRadius: 24,
+    paddingHorizontal: 15,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 20,
+  },
+  scanButton: {
+    height: 38,
+    borderRadius: 19,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F3F5F6',
+  },
   hero: { alignItems: 'center', marginBottom: 34 },
   heroOrbit: {
     width: '100%',

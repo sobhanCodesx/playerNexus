@@ -1,4 +1,5 @@
 import { Pressable, StyleSheet, View } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 
 import { Album, Artist, Track } from '@/data/library';
@@ -29,7 +30,7 @@ export function NexusTrackRow({
           {String((index ?? 0) + 1).padStart(2, '0')}
         </NexusText>
       ) : (
-        <NexusArtwork palette={track.palette} size={42} radius={12} />
+        <NexusArtwork palette={track.palette} artworkUri={track.artworkUri} size={42} radius={12} />
       )}
       <View style={styles.trackMeta}>
         <NexusText numberOfLines={1} style={styles.trackTitle}>{track.title}</NexusText>
@@ -49,7 +50,7 @@ export function NexusAlbumTile({ album, width = 158 }: { album: Album; width?: n
     <Pressable
       onPress={() => router.push({ pathname: '/album', params: { id: album.id } })}
       style={({ pressed }) => [{ width, gap: 9 }, pressed && styles.pressed]}>
-      <NexusArtwork palette={album.palette} size={width} radius={22} />
+      <NexusArtwork palette={album.palette} artworkUri={album.artworkUri} size={width} radius={22} />
       <View style={{ gap: 2 }}>
         <NexusText variant="caption" numberOfLines={1}>{album.title}</NexusText>
         <NexusText variant="micro" muted numberOfLines={1}>{album.artist.toUpperCase()}</NexusText>
@@ -76,8 +77,11 @@ export function NexusArtistBubble({ artist, size = 78 }: { artist: Artist; size?
           },
         ]}>
         <View style={[styles.artistGlow, { backgroundColor: artist.palette[0] }]} />
+        {artist.artworkUri ? (
+          <Image source={{ uri: artist.artworkUri }} contentFit="cover" cachePolicy="memory-disk" style={StyleSheet.absoluteFill} />
+        ) : null}
         <NexusText variant="heading" style={{ fontSize: size * 0.27 }}>
-          {artist.name.split(' ').map((part) => part[0]).join('').slice(0, 2)}
+          {artist.artworkUri ? '' : artist.name.split(' ').map((part) => part[0]).join('').slice(0, 2)}
         </NexusText>
       </View>
       <NexusText variant="caption" numberOfLines={1} style={{ maxWidth: size + 24 }}>{artist.name}</NexusText>

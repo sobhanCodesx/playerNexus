@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Pressable, StyleSheet, useWindowDimensions, Vibration, View } from 'react-native';
+import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { usePlayer } from '@/providers/player-provider';
 import { gradientBackground, nexusTokens } from '@/design/nexus-tokens';
+import { nexusHaptics } from '@/services/haptics';
 import {
   NexusArtwork,
   NexusAura,
@@ -25,6 +26,12 @@ import {
   NexusText,
   NexusWaveform,
 } from './nexus-primitives';
+
+function formatTime(seconds: number) {
+  if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
+  const rounded = Math.floor(seconds);
+  return Math.floor(rounded / 60) + ':' + String(rounded % 60).padStart(2, '0');
+}
 
 export function NexusPlayerLayer() {
   const player = usePlayer();
@@ -129,7 +136,7 @@ export function NexusPlayerLayer() {
       if (Math.abs(event.translationX) < 54 && Math.abs(event.velocityX) < 420) return;
       if (event.translationX < 0) runOnJS(player.next)();
       else runOnJS(player.previous)();
-      runOnJS(Vibration.vibrate)(6);
+      runOnJS(nexusHaptics.transport)();
     });
 
   const favoriteTap = Gesture.Tap()
@@ -138,14 +145,14 @@ export function NexusPlayerLayer() {
     .onEnd((_event, success) => {
       if (success) {
         runOnJS(player.toggleFavorite)();
-        runOnJS(Vibration.vibrate)(12);
+        runOnJS(nexusHaptics.favorite)();
       }
     });
 
   const longPress = Gesture.LongPress()
     .minDuration(520)
     .onStart(() => {
-      runOnJS(Vibration.vibrate)(10);
+      runOnJS(nexusHaptics.lift)();
       runOnJS(openQueue)();
     });
 
@@ -170,6 +177,7 @@ export function NexusPlayerLayer() {
           <NexusAura
             palette={player.track.palette}
             active={player.isPlaying}
+            bands={player.audioBands}
             size={Math.max(width, height) * 0.78}
             style={styles.fullAura}
           />
@@ -179,6 +187,7 @@ export function NexusPlayerLayer() {
           <Animated.View style={[styles.artAbsolute, artStyle]}>
             <NexusArtwork
               palette={player.track.palette}
+              artworkUri={player.track.artworkUri}
               size={width}
               radius={0}
               active={player.isPlaying}
@@ -203,7 +212,7 @@ export function NexusPlayerLayer() {
             accessibilityLabel={player.isPlaying ? 'Pause' : 'Play'}
             onPress={(event) => {
               event.stopPropagation();
-              Vibration.vibrate(7);
+              nexusHaptics.play();
               player.togglePlayback();
             }}
             style={styles.miniPlay}>
@@ -260,7 +269,7 @@ export function NexusPlayerLayer() {
           <View style={styles.waveBlock}>
             <NexusWaveform progress={player.progress} onSeek={player.seek} accent={player.theme.accent} />
             <View style={styles.timeRow}>
-              <NexusText variant="micro" muted>1:34</NexusText>
+              <NexusText variant="micro" muted>{formatTime(player.currentTime)}</NexusText>
               <NexusText variant="micro" muted>{player.track.duration}</NexusText>
             </View>
           </View>
@@ -285,7 +294,16 @@ export function NexusPlayerLayer() {
               <NexusText variant="caption">Lyrics</NexusText>
               <NexusText variant="micro" muted>FOCUS MODE</NexusText>
             </Pressable>
-            <NexusOrb palette={player.track.palette} active={player.isPlaying} size={68} />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={player.audioReactiveEnabled ? 'Audio reactive visuals enabled' : 'Enable audio reactive visuals'}
+              onPress={() => {
+                if (!player.audioReactiveEnabled) player.enableAudioReactive();
+              }}
+              style={styles.orbMode}>
+              <NexusOrb palette={player.track.palette} active={player.isPlaying} bands={player.audioBands} size={68} />
+              <NexusText variant="micro" muted>{player.audioReactiveEnabled ? 'AUDIO LIVE' : 'TAP FOR LIVE'}</NexusText>
+            </Pressable>
             <Pressable onPress={openQueue} style={[styles.modeLink, styles.modeRight]}>
               <NexusText variant="caption">Up next</NexusText>
               <NexusText variant="micro" muted>{player.queue.length} TRACKS</NexusText>
@@ -393,4 +411,5 @@ const styles = StyleSheet.create({
   },
   modeLink: { width: 92, gap: 2 },
   modeRight: { alignItems: 'flex-end' },
+  orbMode: { alignItems: 'center', gap: 5, marginTop: -5 },
 });

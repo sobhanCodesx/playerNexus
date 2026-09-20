@@ -13,7 +13,7 @@ export function NexusScreen({
   ...props
 }: PropsWithChildren<ScrollViewProps & { scroll?: boolean }>) {
   const insets = useSafeAreaInsets();
-  const { track, theme, isPlaying } = usePlayer();
+  const { track, theme, isPlaying, audioBands } = usePlayer();
   const content = (
     <View
       style={[
@@ -34,6 +34,7 @@ export function NexusScreen({
       <NexusAura
         palette={track.palette}
         active={isPlaying}
+        bands={audioBands}
         size={520}
         style={styles.aura}
       />
