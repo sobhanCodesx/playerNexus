@@ -64,8 +64,8 @@ export function NexusVisualizerField({
   active: boolean;
   size: number;
 }) {
-  const { settings } = useNexusSettings();
-  const quality = getNexusQualityProfile(settings.visualQuality);
+  const { settings, effectiveVisualQuality } = useNexusSettings();
+  const quality = getNexusQualityProfile(effectiveVisualQuality);
   const drift = useSharedValue(0);
 
   useEffect(() => {
@@ -77,7 +77,7 @@ export function NexusVisualizerField({
   }, [active, drift, settings.reduceMotion]);
 
   const contourSteps =
-    settings.visualQuality === 'ultra' ? 42 : settings.visualQuality === 'low' ? 14 : 24;
+    effectiveVisualQuality === 'ultra' ? 42 : effectiveVisualQuality === 'low' ? 14 : 24;
   const contourBass = Math.round(bands.bass * contourSteps) / contourSteps;
   const contourMid = Math.round(bands.mid * contourSteps) / contourSteps;
   const contourHigh = Math.round(bands.high * contourSteps) / contourSteps;

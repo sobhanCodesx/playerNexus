@@ -100,9 +100,9 @@ const PlayerContext = createContext<PlayerContextValue | null>(null);
 const PlayerActionsContext = createContext<PlayerActionsContextValue | null>(null);
 
 export function PlayerProvider({ children }: PropsWithChildren) {
-  const { settings } = useNexusSettings();
-  const quality = getNexusQualityProfile(settings.visualQuality);
-  const audioPlayer = useAudioPlayer(null, { updateInterval: settings.visualQuality === 'ultra' ? 70 : 100 });
+  const { settings, effectiveVisualQuality } = useNexusSettings();
+  const quality = getNexusQualityProfile(effectiveVisualQuality);
+  const audioPlayer = useAudioPlayer(null, { updateInterval: effectiveVisualQuality === 'ultra' ? 70 : 100 });
   const audioStatus = useAudioPlayerStatus(audioPlayer);
   const analyzer = useRef(createNexusAudioAnalyzer());
   const lastBandUpdate = useRef(0);
@@ -352,9 +352,9 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     const next = analyzer.current(sample);
     const previous = lastPublishedBands.current;
     const threshold =
-      settings.visualQuality === 'low'
+      effectiveVisualQuality === 'low'
         ? 0.055
-        : settings.visualQuality === 'ultra'
+        : effectiveVisualQuality === 'ultra'
           ? 0.018
           : 0.032;
     const delta = Math.max(

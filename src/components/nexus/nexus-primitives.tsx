@@ -261,8 +261,8 @@ export function NexusAura({
   size?: number;
   style?: StyleProp<ViewStyle>;
 }) {
-  const { settings } = useNexusSettings();
-  const quality = getNexusQualityProfile(settings.visualQuality);
+  const { settings, effectiveVisualQuality } = useNexusSettings();
+  const quality = getNexusQualityProfile(effectiveVisualQuality);
   const phase = useSharedValue(0);
   const bass = useSharedValue(bands.bass);
   const mid = useSharedValue(bands.mid);
@@ -412,7 +412,7 @@ export function NexusOrb({
   }, [active, idle, settings.reduceMotion]);
 
   const pathSteps =
-    settings.visualQuality === 'ultra' ? 48 : settings.visualQuality === 'low' ? 16 : 28;
+    effectiveVisualQuality === 'ultra' ? 48 : effectiveVisualQuality === 'low' ? 16 : 28;
   const pathBass = Math.round(bands.bass * pathSteps) / pathSteps;
   const pathMid = Math.round(bands.mid * pathSteps) / pathSteps;
   const pathHigh = Math.round(bands.high * pathSteps) / pathSteps;
