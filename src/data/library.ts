@@ -9,6 +9,14 @@ export type Track = {
   year: number;
   palette: NexusPalette;
   favorite?: boolean;
+  source?: 'demo' | 'device';
+  nativeId?: string;
+  uri?: string;
+  durationMs?: number;
+  albumId?: string;
+  artworkUri?: string | null;
+  dateAdded?: number;
+  folder?: string;
 };
 
 export type Album = {
@@ -18,6 +26,7 @@ export type Album = {
   year: number;
   palette: NexusPalette;
   trackIds: string[];
+  artworkUri?: string | null;
 };
 
 export type Artist = {
@@ -25,6 +34,7 @@ export type Artist = {
   name: string;
   palette: NexusPalette;
   monthlyMood: string;
+  artworkUri?: string | null;
 };
 
 export const tracks: Track[] = [
