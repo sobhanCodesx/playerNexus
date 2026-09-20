@@ -67,9 +67,9 @@ export function NexusSurface({
   style,
   intensity = 'medium',
 }: PropsWithChildren<{ style?: StyleProp<ViewStyle>; intensity?: 'soft' | 'medium' | 'strong' }>) {
-  const { settings } = useNexusSettings();
+  const { settings, effectiveVisualQuality } = useNexusSettings();
   const light = settings.themeMode === 'light';
-  const quality = getNexusQualityProfile(settings.visualQuality);
+  const quality = getNexusQualityProfile(effectiveVisualQuality);
   const alpha = intensity === 'soft' ? 0.045 : intensity === 'strong' ? 0.11 : 0.075;
   const baseBlur = intensity === 'soft' ? 10 : intensity === 'strong' ? 24 : 16;
   const blur = Math.round(baseBlur * (quality.visualizerBlurScale < 0.7 ? 0.72 : 1));
@@ -393,8 +393,8 @@ export function NexusOrb({
   bands?: AudioBands;
   size?: number;
 }) {
-  const { settings } = useNexusSettings();
-  const quality = getNexusQualityProfile(settings.visualQuality);
+  const { settings, effectiveVisualQuality } = useNexusSettings();
+  const quality = getNexusQualityProfile(effectiveVisualQuality);
   const idle = useSharedValue(0);
   useEffect(() => {
     if (settings.reduceMotion) {
