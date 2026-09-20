@@ -1,24 +1,34 @@
 import * as Haptics from 'expo-haptics';
 
+let hapticsEnabled = true;
+
+export function configureNexusHaptics(enabled: boolean) {
+  hapticsEnabled = enabled;
+}
+
 const ignore = (promise: Promise<void>) => promise.catch(() => undefined);
+const run = (factory: () => Promise<void>) => {
+  if (!hapticsEnabled) return;
+  ignore(factory());
+};
 
 export const nexusHaptics = {
   play() {
-    ignore(Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft));
+    run(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft));
   },
   transport() {
-    ignore(Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light));
+    run(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light));
   },
   favorite() {
-    ignore(Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success));
+    run(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success));
   },
   lift() {
-    ignore(Haptics.selectionAsync());
+    run(() => Haptics.selectionAsync());
   },
   seek() {
-    ignore(Haptics.selectionAsync());
+    run(() => Haptics.selectionAsync());
   },
   settle() {
-    ignore(Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft));
+    run(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft));
   },
 };

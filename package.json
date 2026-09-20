@@ -34,7 +34,8 @@
     "expo-haptics": "~57.0.3",
     "expo-linear-gradient": "~57.0.2",
     "expo-media-library": "~57.0.5",
-    "expo-modules-core": "~57.0.18"
+    "expo-modules-core": "~57.0.18",
+    "@react-native-async-storage/async-storage": "2.2.0"
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
