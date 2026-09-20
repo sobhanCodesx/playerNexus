@@ -68,14 +68,16 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       });
     },
     moveQueueItem: (from, to) => {
+      const activeId = track.id;
       setQueue((current) => {
         if (from === to || from < 0 || to < 0 || from >= current.length || to >= current.length) return current;
         const copy = [...current];
         const [item] = copy.splice(from, 1);
         copy.splice(to, 0, item);
+        const activeIndex = copy.findIndex((entry) => entry.id === activeId);
+        if (activeIndex >= 0) setCurrentIndex(activeIndex);
         return copy;
       });
-      setCurrentIndex((i) => Math.min(i, queue.length - 1));
     },
   }), [track, queue, isPlaying, progress, expanded, favorites]);
 

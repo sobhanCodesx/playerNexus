@@ -55,7 +55,7 @@ const styles=StyleSheet.create({
   trackStrip:{marginTop:12,flexDirection:'row',alignItems:'center',gap:12},
   lyrics:{marginTop:38,gap:17},
   lineWrap:{paddingVertical:2},
-  line:{fontSize:27,lineHeight:34,fontWeight:'650',letterSpacing:-0.6,color:'rgba(246,247,248,0.18)'},
+  line:{fontSize:27,lineHeight:34,fontWeight:'600',letterSpacing:-0.6,color:'rgba(246,247,248,0.18)'},
   current:{fontSize:32,lineHeight:39,color:'#F6F7F8',fontWeight:'700'},
   near:{color:'rgba(246,247,248,0.45)'},
   far:{color:'rgba(246,247,248,0.16)'},

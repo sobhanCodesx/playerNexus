@@ -33,6 +33,8 @@ export function NexusPlayerLayer() {
   const { width, height } = useWindowDimensions();
   const expansion = useSharedValue(player.expanded ? 1 : 0);
   const playPulse = useSharedValue(0);
+  const gestureStart = useSharedValue(0);
+  const openQueue = () => router.push('/queue');
 
   useEffect(() => {
     expansion.value = withSpring(player.expanded ? 1 : 0, {
@@ -90,10 +92,27 @@ export function NexusPlayerLayer() {
   }));
 
   const verticalPan = Gesture.Pan()
-    .activeOffsetY([-18, 18])
+    .activeOffsetY([-8, 8])
+    .onStart(() => {
+      gestureStart.value = expansion.value;
+    })
+    .onUpdate((event) => {
+      const travel = Math.max(280, height * 0.52);
+      const next = gestureStart.value < 0.5
+        ? -event.translationY / travel
+        : 1 - event.translationY / travel;
+      expansion.value = Math.max(0, Math.min(1, next));
+    })
     .onEnd((event) => {
-      if (!player.expanded && event.translationY < -28) runOnJS(player.openPlayer)();
-      if (player.expanded && event.translationY > 86) runOnJS(player.closePlayer)();
+      const shouldOpen = expansion.value > 0.38 || event.velocityY < -520;
+      const shouldClose = expansion.value < 0.72 || event.velocityY > 620;
+      if (gestureStart.value < 0.5) {
+        if (shouldOpen) runOnJS(player.openPlayer)();
+        else expansion.value = withSpring(0, { damping: 24, stiffness: 220 });
+      } else {
+        if (shouldClose) runOnJS(player.closePlayer)();
+        else expansion.value = withSpring(1, { damping: 24, stiffness: 190 });
+      }
     });
 
   const artworkSwipe = Gesture.Pan()
@@ -120,7 +139,7 @@ export function NexusPlayerLayer() {
     .minDuration(520)
     .onStart(() => {
       runOnJS(Vibration.vibrate)(10);
-      runOnJS(router.push)('/queue');
+      runOnJS(openQueue)();
     });
 
   const artworkGesture = Gesture.Exclusive(favoriteTap, longPress, artworkSwipe);
@@ -128,7 +147,7 @@ export function NexusPlayerLayer() {
   return (
     <GestureDetector gesture={verticalPan}>
       <Animated.View
-        pointerEvents="box-none"
+        pointerEvents="auto"
         style={[styles.shell, shellStyle, { backgroundColor: player.theme.glassTint }]}>
         <Animated.View
           pointerEvents="none"

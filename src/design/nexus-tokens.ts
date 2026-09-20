@@ -7,7 +7,7 @@ export const nexusTokens = {
   type: {
     display: { fontSize: 38, lineHeight: 42, fontWeight: '700' as const, letterSpacing: -1.5 },
     title: { fontSize: 26, lineHeight: 31, fontWeight: '700' as const, letterSpacing: -0.7 },
-    heading: { fontSize: 18, lineHeight: 23, fontWeight: '650' as const, letterSpacing: -0.25 },
+    heading: { fontSize: 18, lineHeight: 23, fontWeight: '600' as const, letterSpacing: -0.25 },
     body: { fontSize: 15, lineHeight: 21, fontWeight: '500' as const },
     caption: { fontSize: 12, lineHeight: 16, fontWeight: '600' as const, letterSpacing: 0.15 },
     micro: { fontSize: 10, lineHeight: 13, fontWeight: '700' as const, letterSpacing: 0.7 },

@@ -106,7 +106,7 @@ const styles = StyleSheet.create({
   },
   trackNumber: { width: 24, textAlign: 'center' },
   trackMeta: { flex: 1, gap: 2 },
-  trackTitle: { fontSize: 15, fontWeight: '650' },
+  trackTitle: { fontSize: 15, fontWeight: '600' },
   more: { width: 28, alignItems: 'flex-end' },
   artist: { alignItems: 'center', gap: 9 },
   artistArt: {
