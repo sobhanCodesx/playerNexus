@@ -309,7 +309,15 @@ export function NexusPlayerLayer() {
           </View>
 
           <View style={styles.controlField}>
-            <NexusIconButton ios="shuffle" android="shuffle" accessibilityLabel="Shuffle" size={44} />
+            <NexusIconButton
+              ios="shuffle"
+              android="shuffle"
+              accessibilityLabel={player.shuffleEnabled ? 'Disable shuffle' : 'Enable shuffle'}
+              onPress={player.toggleShuffle}
+              active={player.shuffleEnabled}
+              accent={player.theme.accent}
+              size={44}
+            />
             <NexusIconButton ios="backward.end.fill" android="skip_previous" accessibilityLabel="Previous" onPress={player.previous} size={52} />
             <NexusIconButton
               ios={player.isPlaying ? 'pause.fill' : 'play.fill'}
@@ -320,7 +328,21 @@ export function NexusPlayerLayer() {
               primary
             />
             <NexusIconButton ios="forward.end.fill" android="skip_next" accessibilityLabel="Next" onPress={player.next} size={52} />
-            <NexusIconButton ios="repeat" android="repeat" accessibilityLabel="Repeat" size={44} />
+            <NexusIconButton
+              ios={player.repeatMode === 'one' ? 'repeat.1' : 'repeat'}
+              android={player.repeatMode === 'one' ? 'repeat_one' : 'repeat'}
+              accessibilityLabel={
+                player.repeatMode === 'off'
+                  ? 'Repeat off'
+                  : player.repeatMode === 'all'
+                    ? 'Repeat all'
+                    : 'Repeat one'
+              }
+              onPress={player.toggleRepeat}
+              active={player.repeatMode !== 'off'}
+              accent={player.theme.accent}
+              size={44}
+            />
           </View>
 
           <View style={styles.bottomModes}>

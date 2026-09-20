@@ -38,6 +38,7 @@ import {
   reconcileTrackOrder,
   saveNexusPlaybackSession,
   type NexusPlaybackSession,
+  type NexusRepeatMode,
 } from '@/services/session-store';
 
 export type LibraryStatus = 'checking' | 'permission' | 'scanning' | 'ready' | 'empty' | 'error';
@@ -51,6 +52,8 @@ type PlayerContextValue = {
   recentTracks: Track[];
   favoriteTracks: Track[];
   playCounts: Record<string, number>;
+  shuffleEnabled: boolean;
+  repeatMode: NexusRepeatMode;
   libraryStatus: LibraryStatus;
   libraryPermission: LibraryPermission;
   isPlaying: boolean;
@@ -71,6 +74,8 @@ type PlayerContextValue = {
   openPlayer: () => void;
   closePlayer: () => void;
   toggleFavorite: () => void;
+  toggleShuffle: () => void;
+  toggleRepeat: () => void;
   moveQueueItem: (from: number, to: number) => void;
   scanLibrary: (requestPermission?: boolean) => Promise<void>;
   enableAudioReactive: () => Promise<boolean>;
@@ -98,6 +103,8 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     favoriteIds: string[];
     recentIds: string[];
     playCounts: Record<string, number>;
+    shuffleEnabled: boolean;
+    repeatMode: NexusRepeatMode;
   }>({
     currentTrackId: null,
     positionSec: 0,
@@ -105,6 +112,8 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     favoriteIds: [],
     recentIds: [],
     playCounts: {},
+    shuffleEnabled: false,
+    repeatMode: 'off',
   });
 
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -116,6 +125,8 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const [favorites, setFavorites] = useState(() => new Set(demoTracks.filter((t) => t.favorite).map((t) => t.id)));
   const [recentIds, setRecentIds] = useState<string[]>([]);
   const [playCounts, setPlayCounts] = useState<Record<string, number>>({});
+  const [shuffleEnabled, setShuffleEnabled] = useState(false);
+  const [repeatMode, setRepeatMode] = useState<NexusRepeatMode>('off');
   const [sessionHydrated, setSessionHydrated] = useState(false);
   const [libraryStatus, setLibraryStatus] = useState<LibraryStatus>('checking');
   const [libraryPermission, setLibraryPermission] = useState<LibraryPermission>('undetermined');
@@ -153,6 +164,8 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       if (saved.favoriteIds.length) setFavorites(new Set(saved.favoriteIds));
       setRecentIds(saved.recentIds);
       setPlayCounts(saved.playCounts);
+      setShuffleEnabled(saved.shuffleEnabled);
+      setRepeatMode(saved.repeatMode);
 
       const orderedDemo = reconcileTrackOrder(demoTracks, saved.queueIds);
       if (orderedDemo.length) {
@@ -302,11 +315,44 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   }, [audioPlayer, isRealTrack, track.title, track.artist, track.album, track.artworkUri]);
 
   useEffect(() => {
-    if (audioStatus.didJustFinish && isRealTrack) {
+    if (!audioStatus.didJustFinish || !isRealTrack) return;
+
+    if (repeatMode === 'one') {
       playIntent.current = true;
-      setCurrentIndex((index) => (index + 1) % Math.max(1, queue.length));
+      audioPlayer.seekTo(0).then(() => audioPlayer.play()).catch(() => undefined);
+      return;
     }
-  }, [audioStatus.didJustFinish, isRealTrack, queue.length]);
+
+    if (shuffleEnabled && queue.length > 1) {
+      playIntent.current = true;
+      setCurrentIndex((index) => {
+        let nextIndex = index;
+        while (nextIndex === index) nextIndex = Math.floor(Math.random() * queue.length);
+        return nextIndex;
+      });
+      return;
+    }
+
+    setCurrentIndex((index) => {
+      if (index < queue.length - 1) {
+        playIntent.current = true;
+        return index + 1;
+      }
+      if (repeatMode === 'all') {
+        playIntent.current = true;
+        return 0;
+      }
+      playIntent.current = false;
+      return index;
+    });
+  }, [
+    audioPlayer,
+    audioStatus.didJustFinish,
+    isRealTrack,
+    queue.length,
+    repeatMode,
+    shuffleEnabled,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -371,8 +417,20 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       favoriteIds: [...favorites],
       recentIds,
       playCounts,
+      shuffleEnabled,
+      repeatMode,
     };
-  }, [currentTime, favorites, playCounts, queue, recentIds, sessionHydrated, track.id]);
+  }, [
+    currentTime,
+    favorites,
+    playCounts,
+    queue,
+    recentIds,
+    repeatMode,
+    sessionHydrated,
+    shuffleEnabled,
+    track.id,
+  ]);
 
   useEffect(() => {
     if (!sessionHydrated) return;
@@ -434,9 +492,17 @@ export function PlayerProvider({ children }: PropsWithChildren) {
 
   const next = useCallback(() => {
     playIntent.current = isPlaying;
-    setCurrentIndex((index) => (index + 1) % Math.max(1, queue.length));
+    setCurrentIndex((index) => {
+      if (shuffleEnabled && queue.length > 1) {
+        let nextIndex = index;
+        while (nextIndex === index) nextIndex = Math.floor(Math.random() * queue.length);
+        return nextIndex;
+      }
+      if (index < queue.length - 1) return index + 1;
+      return repeatMode === 'all' ? 0 : index;
+    });
     setDemoProgress(0);
-  }, [isPlaying, queue.length]);
+  }, [isPlaying, queue.length, repeatMode, shuffleEnabled]);
 
   const previous = useCallback(() => {
     if (isRealTrack && audioStatus.currentTime > 4) {
@@ -444,9 +510,12 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       return;
     }
     playIntent.current = isPlaying;
-    setCurrentIndex((index) => (index - 1 + queue.length) % Math.max(1, queue.length));
+    setCurrentIndex((index) => {
+      if (index > 0) return index - 1;
+      return repeatMode === 'all' ? Math.max(0, queue.length - 1) : 0;
+    });
     setDemoProgress(0);
-  }, [audioPlayer, audioStatus.currentTime, isPlaying, isRealTrack, queue.length]);
+  }, [audioPlayer, audioStatus.currentTime, isPlaying, isRealTrack, queue.length, repeatMode]);
 
   const seek = useCallback((value: number) => {
     const normalized = Math.min(1, Math.max(0, value));
@@ -466,6 +535,8 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     recentTracks,
     favoriteTracks,
     playCounts,
+    shuffleEnabled,
+    repeatMode,
     libraryStatus,
     libraryPermission,
     isPlaying,
@@ -493,6 +564,9 @@ export function PlayerProvider({ children }: PropsWithChildren) {
         return copy;
       });
     },
+    toggleShuffle: () => setShuffleEnabled((current) => !current),
+    toggleRepeat: () =>
+      setRepeatMode((current) => current === 'off' ? 'all' : current === 'all' ? 'one' : 'off'),
     moveQueueItem: (from, to) => {
       const activeId = track.id;
       setQueue((current) => {
@@ -516,6 +590,8 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     recentTracks,
     favoriteTracks,
     playCounts,
+    shuffleEnabled,
+    repeatMode,
     libraryStatus,
     libraryPermission,
     isPlaying,

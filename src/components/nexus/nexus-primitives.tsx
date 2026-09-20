@@ -128,6 +128,8 @@ export function NexusIconButton({
   size = 48,
   primary = false,
   accessibilityLabel,
+  active = false,
+  accent = '#F3F5F6',
 }: {
   ios: string;
   android: string;
@@ -135,6 +137,8 @@ export function NexusIconButton({
   size?: number;
   primary?: boolean;
   accessibilityLabel: string;
+  active?: boolean;
+  accent?: string;
 }) {
   const pressed = useSharedValue(0);
   const animated = useAnimatedStyle(() => ({
@@ -160,12 +164,13 @@ export function NexusIconButton({
           styles.iconButton,
           { width: size, height: size, borderRadius: size / 2 },
           primary && styles.iconButtonPrimary,
+          active && !primary && { backgroundColor: accent + '22', borderColor: accent + '55', borderWidth: StyleSheet.hairlineWidth },
         ]}>
         <NexusIcon
           ios={ios}
           android={android}
           size={primary ? Math.round(size * 0.43) : Math.round(size * 0.38)}
-          color={primary ? '#101418' : nexusTokens.colors.white}
+          color={primary ? '#101418' : active ? accent : undefined}
         />
       </Pressable>
     </Animated.View>

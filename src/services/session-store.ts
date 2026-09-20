@@ -2,6 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const KEY = 'nexus.playback-session.v1';
 
+export type NexusRepeatMode = 'off' | 'all' | 'one';
+
 export type NexusPlaybackSession = {
   currentTrackId: string | null;
   positionSec: number;
@@ -9,6 +11,8 @@ export type NexusPlaybackSession = {
   favoriteIds: string[];
   recentIds: string[];
   playCounts: Record<string, number>;
+  shuffleEnabled: boolean;
+  repeatMode: NexusRepeatMode;
   updatedAt: number;
 };
 
@@ -19,6 +23,8 @@ const emptySession = (): NexusPlaybackSession => ({
   favoriteIds: [],
   recentIds: [],
   playCounts: {},
+  shuffleEnabled: false,
+  repeatMode: 'off',
   updatedAt: 0,
 });
 
@@ -40,6 +46,8 @@ export async function loadNexusPlaybackSession(): Promise<NexusPlaybackSession> 
               .map(([id, count]) => [id, Math.max(0, Number(count))]),
           )
         : {},
+      shuffleEnabled: parsed.shuffleEnabled === true,
+      repeatMode: parsed.repeatMode === 'all' || parsed.repeatMode === 'one' ? parsed.repeatMode : 'off',
       updatedAt: Number.isFinite(parsed.updatedAt) ? Number(parsed.updatedAt) : 0,
     };
   } catch {
