@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 
@@ -28,6 +29,7 @@ export type NexusSettings = {
 type SettingsContextValue = {
   hydrated: boolean;
   settings: NexusSettings;
+  effectiveVisualQuality: NexusVisualQuality;
   updateSetting: <K extends keyof NexusSettings>(key: K, value: NexusSettings[K]) => void;
   completeOnboarding: (themeMode: NexusThemeMode) => void;
   resetOnboarding: () => void;
@@ -51,6 +53,15 @@ const SettingsContext = createContext<SettingsContextValue | null>(null);
 export function NexusSettingsProvider({ children }: PropsWithChildren) {
   const [hydrated, setHydrated] = useState(false);
   const [settings, setSettings] = useState<NexusSettings>(defaults);
+  const [effectiveVisualQuality, setEffectiveVisualQuality] = useState<NexusVisualQuality>(
+    defaults.visualQuality,
+  );
+  const performanceWindow = useRef({
+    lastFrameAt: 0,
+    frames: 0,
+    stalledFrames: 0,
+    recoveryWindows: 0,
+  });
 
   useEffect(() => {
     let active = true;
@@ -75,6 +86,71 @@ export function NexusSettingsProvider({ children }: PropsWithChildren) {
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(settings)).catch(() => undefined);
   }, [hydrated, settings]);
 
+  useEffect(() => {
+    setEffectiveVisualQuality(settings.visualQuality);
+    performanceWindow.current = {
+      lastFrameAt: 0,
+      frames: 0,
+      stalledFrames: 0,
+      recoveryWindows: 0,
+    };
+  }, [settings.visualQuality]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+
+    const levels: NexusVisualQuality[] = ['low', 'balanced', 'ultra'];
+    const userCeiling = levels.indexOf(settings.visualQuality);
+    let frameHandle = 0;
+    let active = true;
+
+    const sampleFrame = (now: number) => {
+      if (!active) return;
+      const window = performanceWindow.current;
+      if (window.lastFrameAt > 0) {
+        const delta = now - window.lastFrameAt;
+        if (delta > 0 && delta < 250) {
+          window.frames += 1;
+          if (delta > 29) window.stalledFrames += 1;
+
+          if (window.frames >= 90) {
+            const stallRatio = window.stalledFrames / window.frames;
+            setEffectiveVisualQuality((current) => {
+              const currentLevel = levels.indexOf(current);
+
+              if (stallRatio >= 0.12 && currentLevel > 0) {
+                window.recoveryWindows = 0;
+                return levels[currentLevel - 1];
+              }
+
+              if (stallRatio <= 0.025 && currentLevel < userCeiling) {
+                window.recoveryWindows += 1;
+                if (window.recoveryWindows >= 5) {
+                  window.recoveryWindows = 0;
+                  return levels[Math.min(userCeiling, currentLevel + 1)];
+                }
+              } else {
+                window.recoveryWindows = 0;
+              }
+
+              return current;
+            });
+            window.frames = 0;
+            window.stalledFrames = 0;
+          }
+        }
+      }
+      window.lastFrameAt = now;
+      frameHandle = requestAnimationFrame(sampleFrame);
+    };
+
+    frameHandle = requestAnimationFrame(sampleFrame);
+    return () => {
+      active = false;
+      cancelAnimationFrame(frameHandle);
+    };
+  }, [hydrated, settings.visualQuality]);
+
   const updateSetting = useCallback(
     <K extends keyof NexusSettings>(key: K, value: NexusSettings[K]) => {
       setSettings((current) => ({ ...current, [key]: value }));
@@ -98,11 +174,19 @@ export function NexusSettingsProvider({ children }: PropsWithChildren) {
     () => ({
       hydrated,
       settings,
+      effectiveVisualQuality,
       updateSetting,
       completeOnboarding,
       resetOnboarding,
     }),
-    [completeOnboarding, hydrated, resetOnboarding, settings, updateSetting],
+    [
+      completeOnboarding,
+      effectiveVisualQuality,
+      hydrated,
+      resetOnboarding,
+      settings,
+      updateSetting,
+    ],
   );
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
