@@ -178,3 +178,22 @@ export async function importLyricsForTrack(track: Track): Promise<NexusLyricsDoc
 export async function removeImportedLyrics(trackId: string) {
   await AsyncStorage.removeItem(keyForTrack(trackId));
 }
+
+
+const timingKeyForTrack = (trackId: string) => 'nexus.lyrics.timing.v1.' + trackId;
+
+export async function loadLyricsTimingAdjustment(trackId: string): Promise<number> {
+  try {
+    const raw = await AsyncStorage.getItem(timingKeyForTrack(trackId));
+    const value = Number(raw);
+    return Number.isFinite(value) ? Math.max(-5000, Math.min(5000, value)) : 0;
+  } catch {
+    return 0;
+  }
+}
+
+export async function saveLyricsTimingAdjustment(trackId: string, milliseconds: number) {
+  const value = Math.max(-5000, Math.min(5000, Math.round(milliseconds / 100) * 100));
+  await AsyncStorage.setItem(timingKeyForTrack(trackId), String(value));
+  return value;
+}

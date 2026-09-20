@@ -11,7 +11,9 @@ import { useRouter } from 'expo-router';
 import { usePlayer } from '@/providers/player-provider';
 import {
   importLyricsForTrack,
+  loadLyricsTimingAdjustment,
   resolveLyrics,
+  saveLyricsTimingAdjustment,
   type NexusLyricLine,
   type NexusLyricsDocument,
 } from '@/services/lyrics-service';
@@ -32,12 +34,18 @@ export default function LyricsScreen() {
   const [document, setDocument] = useState<NexusLyricsDocument | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'empty' | 'error'>('loading');
   const [importing, setImporting] = useState(false);
+  const [timingOffsetMs, setTimingOffsetMs] = useState(0);
   const requestId = useRef(0);
 
   useEffect(() => {
     const id = ++requestId.current;
     setStatus('loading');
     setDocument(null);
+    loadLyricsTimingAdjustment(player.track.id)
+      .then((value) => {
+        if (id === requestId.current) setTimingOffsetMs(value);
+      })
+      .catch(() => undefined);
     resolveLyrics(player.track)
       .then((resolved) => {
         if (id !== requestId.current) return;
@@ -51,7 +59,7 @@ export default function LyricsScreen() {
 
   const activeIndex = useMemo(() => {
     if (!document?.lines.length) return -1;
-    const now = player.currentTime * 1000;
+    const now = player.currentTime * 1000 + timingOffsetMs;
     let low = 0;
     let high = document.lines.length - 1;
     let answer = 0;
@@ -66,7 +74,7 @@ export default function LyricsScreen() {
       }
     }
     return answer;
-  }, [document, player.currentTime]);
+  }, [document, player.currentTime, timingOffsetMs]);
 
   useEffect(() => {
     if (!document?.synced || activeIndex < 0 || !player.isPlaying) return;
@@ -96,7 +104,7 @@ export default function LyricsScreen() {
   const seekLine = (line: NexusLyricLine) => {
     if (line.timeMs == null || player.duration <= 0) return;
     nexusHaptics.seek();
-    player.seek(line.timeMs / (player.duration * 1000));
+    player.seek(Math.max(0, line.timeMs - timingOffsetMs) / (player.duration * 1000));
   };
 
   const renderLine = ({ item, index }: ListRenderItemInfo<NexusLyricLine>) => {
@@ -179,7 +187,44 @@ export default function LyricsScreen() {
       </View>
 
       {status === 'ready' && document ? (
-        <FlatList
+        <>
+          {document.synced ? (
+            <View style={styles.timingBar}>
+              <NexusText variant="micro" muted>TIMING</NexusText>
+              <Pressable
+                onPress={async () => {
+                  const value = await saveLyricsTimingAdjustment(player.track.id, timingOffsetMs - 500);
+                  setTimingOffsetMs(value);
+                  nexusHaptics.seek();
+                }}
+                style={styles.timingButton}>
+                <NexusText variant="micro">−0.5S</NexusText>
+              </Pressable>
+              <Pressable
+                onPress={async () => {
+                  const value = await saveLyricsTimingAdjustment(player.track.id, 0);
+                  setTimingOffsetMs(value);
+                  nexusHaptics.settle();
+                }}
+                style={styles.timingValue}>
+                <NexusText variant="micro" muted>
+                  {timingOffsetMs === 0
+                    ? 'SYNC'
+                    : (timingOffsetMs > 0 ? '+' : '') + (timingOffsetMs / 1000).toFixed(1) + 'S'}
+                </NexusText>
+              </Pressable>
+              <Pressable
+                onPress={async () => {
+                  const value = await saveLyricsTimingAdjustment(player.track.id, timingOffsetMs + 500);
+                  setTimingOffsetMs(value);
+                  nexusHaptics.seek();
+                }}
+                style={styles.timingButton}>
+                <NexusText variant="micro">+0.5S</NexusText>
+              </Pressable>
+            </View>
+          ) : null}
+          <FlatList
           ref={listRef}
           data={document.lines}
           renderItem={renderLine}
@@ -202,6 +247,7 @@ export default function LyricsScreen() {
             </View>
           }
         />
+        </>
       ) : (
         <View style={styles.emptyWrap}>
           <NexusSurface style={styles.empty} intensity="soft">
@@ -236,7 +282,31 @@ const styles = StyleSheet.create({
   navTitle: { flex: 1, alignItems: 'center', gap: 2 },
   trackStrip: { marginTop: 12, flexDirection: 'row', alignItems: 'center', gap: 12 },
   play: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.065)' },
-  lyrics: { paddingTop: 34, paddingBottom: 190, gap: 12 },
+  timingBar: {
+    minHeight: 42,
+    marginTop: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 6,
+  },
+  timingButton: {
+    height: 30,
+    borderRadius: 15,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.055)',
+  },
+  timingValue: {
+    minWidth: 58,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.035)',
+  },
+  lyrics: { paddingTop: 22, paddingBottom: 190, gap: 12 },
   lineWrap: { paddingVertical: 5 },
   line: { fontSize: 25, lineHeight: 33, fontWeight: '600', letterSpacing: -0.5, color: 'rgba(246,247,248,0.18)' },
   current: { fontSize: 31, lineHeight: 39, color: '#F6F7F8', fontWeight: '700' },
