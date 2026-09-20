@@ -10,6 +10,14 @@ import type { NexusPalette } from '@/design/nexus-tokens';
 
 export type LibraryPermission = 'granted' | 'denied' | 'blocked' | 'undetermined';
 
+export type MusicAccessDiagnosticSnapshot = {
+  sdkInt: number;
+  permission: string;
+  declared: boolean | null;
+  granted: boolean;
+  nativeScanner: boolean;
+};
+
 const formatDuration = (milliseconds: number) => {
   const seconds = Math.max(0, Math.round(milliseconds / 1000));
   const minutes = Math.floor(seconds / 60);
@@ -141,6 +149,41 @@ export async function requestMusicPermission(): Promise<LibraryPermission> {
   } catch {
     return 'blocked';
   }
+}
+
+export async function getMusicAccessDiagnostics(): Promise<MusicAccessDiagnosticSnapshot> {
+  const permission =
+    Platform.OS === 'android'
+      ? androidAudioPermission()
+      : 'not-required';
+
+  let granted = Platform.OS !== 'android';
+  if (Platform.OS === 'android') {
+    granted = await PermissionsAndroid.check(permission).catch(() => false);
+  }
+
+  if (Platform.OS === 'android' && isNexusMediaAvailable && NexusMedia) {
+    try {
+      const native = await NexusMedia.musicAccessDiagnostics();
+      return {
+        sdkInt: native.sdkInt,
+        permission: native.permission,
+        declared: native.declared,
+        granted: native.granted,
+        nativeScanner: true,
+      };
+    } catch {
+      // Keep the JS diagnostics path available for stale dev clients.
+    }
+  }
+
+  return {
+    sdkInt: Platform.OS === 'android' ? Number(Platform.Version) : 0,
+    permission,
+    declared: null,
+    granted,
+    nativeScanner: false,
+  };
 }
 
 export async function scanDeviceMusic(limit = 5000): Promise<Track[]> {

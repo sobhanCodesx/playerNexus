@@ -23,7 +23,16 @@ export type ResolvedLyricsSidecar = {
   sourceName: string | null;
 };
 
+export type MusicAccessDiagnostics = {
+  sdkInt: number;
+  packageName: string;
+  permission: string;
+  declared: boolean;
+  granted: boolean;
+};
+
 export type NexusMediaNativeModule = {
+  musicAccessDiagnostics(): Promise<MusicAccessDiagnostics>;
   scanMusic(limit: number): Promise<NativeMusicTrack[]>;
   resolveArtwork(uri: string, cacheKey: string): Promise<ResolvedArtwork>;
   extractWaveform(uri: string, cacheKey: string, bucketCount: number): Promise<number[]>;

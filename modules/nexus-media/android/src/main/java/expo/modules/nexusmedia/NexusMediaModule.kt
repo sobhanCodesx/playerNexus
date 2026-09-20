@@ -1,6 +1,8 @@
 package expo.modules.nexusmedia
 
+import android.Manifest
 import android.content.ContentUris
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.AudioFormat
@@ -25,6 +27,34 @@ class NexusMediaModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("NexusMedia")
 
+    AsyncFunction("musicAccessDiagnostics") {
+      val context = appContext.reactContext
+        ?: throw IllegalStateException("NexusMedia requires an active React context")
+      val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        Manifest.permission.READ_MEDIA_AUDIO
+      } else {
+        Manifest.permission.READ_EXTERNAL_STORAGE
+      }
+      val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        context.packageManager.getPackageInfo(
+          context.packageName,
+          PackageManager.PackageInfoFlags.of(PackageManager.GET_PERMISSIONS.toLong())
+        )
+      } else {
+        @Suppress("DEPRECATION")
+        context.packageManager.getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS)
+      }
+      val declared = packageInfo.requestedPermissions?.contains(permission) == true
+      val granted = context.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
+
+      mapOf(
+        "sdkInt" to Build.VERSION.SDK_INT,
+        "packageName" to context.packageName,
+        "permission" to permission,
+        "declared" to declared,
+        "granted" to granted
+      )
+    }
     AsyncFunction("scanMusic") { limit: Int ->
       val context = appContext.reactContext
         ?: throw IllegalStateException("NexusMedia requires an active React context")

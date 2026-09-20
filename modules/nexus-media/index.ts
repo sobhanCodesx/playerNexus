@@ -4,4 +4,5 @@ export type {
   NexusMediaNativeModule,
   ResolvedArtwork,
   ResolvedLyricsSidecar,
+  MusicAccessDiagnostics,
 } from './src/NexusMediaModule';
