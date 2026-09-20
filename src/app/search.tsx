@@ -47,7 +47,7 @@ export default function SearchScreen() {
               <View style={styles.ringOne}><View style={styles.ringTwo} /></View>
             </View>
             <NexusText variant="heading">Search stays local</NexusText>
-            <NexusText muted style={styles.idleCopy}>Start typing. Results resolve instantly from the device library.</NexusText>
+            <NexusText muted style={styles.idleCopy}>Start typing. Results resolve instantly from the local Nexus index.</NexusText>
           </View>
         ) : (
           <>

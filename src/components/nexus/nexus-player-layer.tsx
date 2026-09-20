@@ -34,7 +34,14 @@ export function NexusPlayerLayer() {
   const expansion = useSharedValue(player.expanded ? 1 : 0);
   const playPulse = useSharedValue(0);
   const gestureStart = useSharedValue(0);
-  const openQueue = () => router.push('/queue');
+  const openQueue = () => {
+    player.closePlayer();
+    router.push('/queue');
+  };
+  const openLyrics = () => {
+    player.closePlayer();
+    router.push('/lyrics');
+  };
 
   useEffect(() => {
     expansion.value = withSpring(player.expanded ? 1 : 0, {
@@ -224,7 +231,7 @@ export function NexusPlayerLayer() {
               ios="text.line.first.and.arrowtriangle.forward"
               android="queue_music"
               accessibilityLabel="Open queue"
-              onPress={() => router.push('/queue')}
+              onPress={openQueue}
               size={44}
             />
           </View>
@@ -274,12 +281,12 @@ export function NexusPlayerLayer() {
           </View>
 
           <View style={styles.bottomModes}>
-            <Pressable onPress={() => router.push('/lyrics')} style={styles.modeLink}>
+            <Pressable onPress={openLyrics} style={styles.modeLink}>
               <NexusText variant="caption">Lyrics</NexusText>
               <NexusText variant="micro" muted>FOCUS MODE</NexusText>
             </Pressable>
             <NexusOrb palette={player.track.palette} active={player.isPlaying} size={68} />
-            <Pressable onPress={() => router.push('/queue')} style={[styles.modeLink, styles.modeRight]}>
+            <Pressable onPress={openQueue} style={[styles.modeLink, styles.modeRight]}>
               <NexusText variant="caption">Up next</NexusText>
               <NexusText variant="micro" muted>{player.queue.length} TRACKS</NexusText>
             </Pressable>
