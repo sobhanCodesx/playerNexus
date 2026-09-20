@@ -95,7 +95,10 @@ export default function OnboardingScreen() {
 
       <View style={styles.content}>
         {step === 0 ? (
-          <Animated.View entering={FadeIn.duration(420)} exiting={FadeOut.duration(180)} style={styles.copyBlock}>
+          <Animated.View
+            entering={effectiveReduceMotion ? undefined : FadeIn.duration(420)}
+            exiting={effectiveReduceMotion ? undefined : FadeOut.duration(180)}
+            style={styles.copyBlock}>
             <NexusText variant="micro" muted style={styles.eyebrow}>MUSIC SHOULD BECOME THE INTERFACE</NexusText>
             <NexusText variant="display" style={styles.headline}>Not a player. A space around sound.</NexusText>
             <NexusText muted style={styles.body}>
@@ -105,7 +108,10 @@ export default function OnboardingScreen() {
         ) : null}
 
         {step === 1 ? (
-          <Animated.View entering={FadeIn.duration(420)} exiting={FadeOut.duration(180)} style={styles.copyBlock}>
+          <Animated.View
+            entering={effectiveReduceMotion ? undefined : FadeIn.duration(420)}
+            exiting={effectiveReduceMotion ? undefined : FadeOut.duration(180)}
+            style={styles.copyBlock}>
             <NexusText variant="micro" muted style={styles.eyebrow}>YOUR LIBRARY · YOUR DEVICE</NexusText>
             <NexusText variant="display" style={styles.headline}>Bring your music into the room.</NexusText>
             <NexusText muted style={styles.body}>
@@ -130,7 +136,9 @@ export default function OnboardingScreen() {
         ) : null}
 
         {step === 2 ? (
-          <Animated.View entering={FadeIn.duration(420)} style={styles.copyBlock}>
+          <Animated.View
+            entering={effectiveReduceMotion ? undefined : FadeIn.duration(420)}
+            style={styles.copyBlock}>
             <NexusText variant="micro" muted style={styles.eyebrow}>CHOOSE THE FIRST MATERIAL</NexusText>
             <NexusText variant="display" style={styles.headline}>How should Nexus wake up?</NexusText>
             <View style={styles.themeGrid}>

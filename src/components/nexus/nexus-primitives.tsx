@@ -260,7 +260,7 @@ export function NexusArtwork({
             source={{ uri: artworkUri }}
             style={StyleSheet.absoluteFill}
             contentFit="cover"
-            transition={240}
+            transition={effectiveReduceMotion ? 0 : 240}
             cachePolicy="memory-disk"
           />
         ) : null}

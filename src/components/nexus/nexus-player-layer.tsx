@@ -285,8 +285,8 @@ export function NexusPlayerLayer() {
         {player.isTransitioning ? (
           <Animated.View
             pointerEvents="none"
-            entering={FadeIn.duration(180)}
-            exiting={FadeOut.duration(260)}
+            entering={effectiveReduceMotion ? undefined : FadeIn.duration(180)}
+            exiting={effectiveReduceMotion ? undefined : FadeOut.duration(260)}
             style={styles.transitionVeil}>
             <View style={[styles.transitionGlow, { backgroundColor: player.theme.primaryAmbient }]} />
             <NexusText variant="micro" muted style={styles.transitionLabel}>BLENDING</NexusText>
@@ -414,8 +414,8 @@ export function NexusPlayerLayer() {
 
         {quickActionsOpen ? (
           <Animated.View
-            entering={FadeIn.duration(160)}
-            exiting={FadeOut.duration(150)}
+            entering={effectiveReduceMotion ? undefined : FadeIn.duration(160)}
+            exiting={effectiveReduceMotion ? undefined : FadeOut.duration(150)}
             style={styles.quickOverlay}>
             <Pressable
               accessibilityRole="button"
@@ -424,8 +424,8 @@ export function NexusPlayerLayer() {
               style={StyleSheet.absoluteFill}
             />
             <Animated.View
-              entering={SlideInDown.duration(320)}
-              exiting={SlideOutDown.duration(220)}
+              entering={effectiveReduceMotion ? undefined : SlideInDown.duration(320)}
+              exiting={effectiveReduceMotion ? undefined : SlideOutDown.duration(220)}
               style={styles.quickSheet}>
               <NexusSurface style={styles.quickSurface} intensity="strong">
                 <View style={styles.quickHandle} />
