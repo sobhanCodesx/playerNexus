@@ -7,11 +7,20 @@ import {
   Text,
   TextProps,
   TextStyle,
-  Vibration,
   View,
   ViewStyle,
 } from 'react-native';
+import { BlurView } from 'expo-blur';
+import { Image } from 'expo-image';
 import { SymbolView } from 'expo-symbols';
+import {
+  BlurMask,
+  Canvas,
+  Circle,
+  Path,
+  RadialGradient,
+  vec,
+} from '@shopify/react-native-skia';
 import Animated, {
   Easing,
   interpolate,
@@ -23,7 +32,10 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
+import type { AudioBands } from '@/audio/audio-analysis';
+import { silentBands } from '@/audio/audio-analysis';
 import { gradientBackground, nexusTokens, type NexusPalette } from '@/design/nexus-tokens';
+import { nexusHaptics } from '@/services/haptics';
 
 export function NexusText({
   variant = 'body',
@@ -51,13 +63,10 @@ export function NexusSurface({
   intensity = 'medium',
 }: PropsWithChildren<{ style?: StyleProp<ViewStyle>; intensity?: 'soft' | 'medium' | 'strong' }>) {
   const alpha = intensity === 'soft' ? 0.045 : intensity === 'strong' ? 0.11 : 0.075;
+  const blur = intensity === 'soft' ? 10 : intensity === 'strong' ? 24 : 16;
   return (
-    <View
-      style={[
-        styles.surface,
-        { backgroundColor: 'rgba(255,255,255,' + alpha + ')' },
-        style,
-      ]}>
+    <View style={[styles.surface, { backgroundColor: 'rgba(12,16,20,' + (0.48 + alpha) + ')' }, style]}>
+      <BlurView pointerEvents="none" intensity={blur} tint="dark" style={StyleSheet.absoluteFill} />
       <View pointerEvents="none" style={styles.surfaceHighlight} />
       {children}
     </View>
@@ -116,7 +125,8 @@ export function NexusIconButton({
           pressed.value = withSpring(0, { damping: 16, stiffness: 220 });
         }}
         onPress={() => {
-          Vibration.vibrate(primary ? 10 : 5);
+          if (primary) nexusHaptics.play();
+          else nexusHaptics.transport();
           onPress?.();
         }}
         style={[
@@ -137,6 +147,7 @@ export function NexusIconButton({
 
 export function NexusArtwork({
   palette,
+  artworkUri,
   size,
   radius = nexusTokens.radius.artwork,
   active = false,
@@ -144,6 +155,7 @@ export function NexusArtwork({
   style,
 }: PropsWithChildren<{
   palette: NexusPalette;
+  artworkUri?: string | null;
   size: number;
   radius?: number;
   active?: boolean;
@@ -183,6 +195,16 @@ export function NexusArtwork({
         <View style={[styles.artworkOrb, { backgroundColor: palette[0] }]} />
         <View style={[styles.artworkOrbSmall, { backgroundColor: palette[1] }]} />
         <View style={styles.artworkCut} />
+        {artworkUri ? (
+          <Image
+            source={{ uri: artworkUri }}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+            transition={240}
+            cachePolicy="memory-disk"
+          />
+        ) : null}
+        <View pointerEvents="none" style={styles.artworkGlass} />
         {children}
       </View>
     </Animated.View>
@@ -192,15 +214,19 @@ export function NexusArtwork({
 export function NexusAura({
   palette,
   active,
+  bands = silentBands,
   size = 420,
   style,
 }: {
   palette: NexusPalette;
   active: boolean;
+  bands?: AudioBands;
   size?: number;
   style?: StyleProp<ViewStyle>;
 }) {
   const phase = useSharedValue(0);
+  const bass = useSharedValue(bands.bass);
+  const mid = useSharedValue(bands.mid);
   useEffect(() => {
     phase.value = withRepeat(
       withTiming(1, {
@@ -211,20 +237,28 @@ export function NexusAura({
       true,
     );
   }, [active, phase]);
+  useEffect(() => {
+    bass.value = withTiming(bands.bass, { duration: 90 });
+    mid.value = withTiming(bands.mid, { duration: 130 });
+  }, [bands.bass, bands.mid, bass, mid]);
 
   const a = useAnimatedStyle(() => ({
-    opacity: active ? interpolate(phase.value, [0, 1], [0.32, 0.48]) : 0.18,
+    opacity: active
+      ? interpolate(phase.value, [0, 1], [0.28, 0.42]) + bass.value * 0.14
+      : 0.17,
     transform: [
       { translateX: interpolate(phase.value, [0, 1], [-22, 18]) },
       { translateY: interpolate(phase.value, [0, 1], [16, -18]) },
-      { scale: interpolate(phase.value, [0, 1], [0.9, 1.08]) },
+      { scale: interpolate(phase.value, [0, 1], [0.9, 1.06]) + bass.value * 0.09 },
     ],
   }));
   const b = useAnimatedStyle(() => ({
-    opacity: active ? interpolate(phase.value, [0, 1], [0.18, 0.3]) : 0.1,
+    opacity: active
+      ? interpolate(phase.value, [0, 1], [0.16, 0.26]) + mid.value * 0.12
+      : 0.09,
     transform: [
       { translateX: interpolate(phase.value, [0, 1], [26, -20]) },
-      { scale: interpolate(phase.value, [0, 1], [1.08, 0.9]) },
+      { scale: interpolate(phase.value, [0, 1], [1.06, 0.91]) + mid.value * 0.06 },
     ],
   }));
 
@@ -261,7 +295,7 @@ export function NexusAura({
             backgroundColor: palette[2],
             left: size * 0.1,
             bottom: size * 0.04,
-            opacity: 0.18,
+            opacity: 0.16 + bands.high * 0.12,
           },
         ]}
       />
@@ -269,45 +303,112 @@ export function NexusAura({
   );
 }
 
+function organicPath(size: number, bands: AudioBands) {
+  const count = 14;
+  const center = size / 2;
+  const base = size * 0.31;
+  const points = Array.from({ length: count }, (_, index) => {
+    const angle = (Math.PI * 2 * index) / count - Math.PI / 2;
+    const midWave = Math.sin(index * 1.83 + bands.mid * 2.6);
+    const highWave = Math.sin(index * 4.1 + bands.high * 3.8);
+    const radius =
+      base *
+      (1 +
+        bands.bass * 0.16 +
+        midWave * (0.035 + bands.mid * 0.055) +
+        highWave * bands.high * 0.022);
+    return {
+      x: center + Math.cos(angle) * radius,
+      y: center + Math.sin(angle) * radius,
+    };
+  });
+
+  const midpoint = (a: typeof points[number], b: typeof points[number]) => ({
+    x: (a.x + b.x) / 2,
+    y: (a.y + b.y) / 2,
+  });
+
+  const start = midpoint(points[count - 1], points[0]);
+  let path = 'M ' + start.x.toFixed(2) + ' ' + start.y.toFixed(2);
+  for (let index = 0; index < count; index += 1) {
+    const current = points[index];
+    const next = points[(index + 1) % count];
+    const mid = midpoint(current, next);
+    path += ' Q ' + current.x.toFixed(2) + ' ' + current.y.toFixed(2) + ' ' + mid.x.toFixed(2) + ' ' + mid.y.toFixed(2);
+  }
+  return path + ' Z';
+}
+
 export function NexusOrb({
   palette,
   active,
+  bands = silentBands,
   size = 82,
 }: {
   palette: NexusPalette;
   active: boolean;
+  bands?: AudioBands;
   size?: number;
 }) {
-  const beat = useSharedValue(0);
+  const idle = useSharedValue(0);
   useEffect(() => {
-    beat.value = withRepeat(
+    idle.value = withRepeat(
       withSequence(
-        withTiming(1, { duration: active ? 520 : 1600, easing: Easing.out(Easing.quad) }),
-        withTiming(0, { duration: active ? 760 : 2200, easing: Easing.inOut(Easing.sin) }),
+        withTiming(1, { duration: active ? 1700 : 3000, easing: Easing.inOut(Easing.sin) }),
+        withTiming(0, { duration: active ? 1900 : 3400, easing: Easing.inOut(Easing.sin) }),
       ),
       -1,
       false,
     );
-  }, [active, beat]);
-  const style = useAnimatedStyle(() => ({
+  }, [active, idle]);
+
+  const path = useMemo(() => organicPath(size, bands), [size, bands]);
+  const animated = useAnimatedStyle(() => ({
     transform: [
-      { scaleX: interpolate(beat.value, [0, 1], [0.94, active ? 1.08 : 1]) },
-      { scaleY: interpolate(beat.value, [0, 1], [1.04, active ? 0.93 : 1]) },
-      { rotate: interpolate(beat.value, [0, 1], [-4, 7]) + 'deg' },
+      { rotate: interpolate(idle.value, [0, 1], [-2.5, 3.5]) + 'deg' },
+      { scale: 1 + bands.bass * 0.035 + bands.transient * 0.025 },
     ],
   }));
 
   return (
-    <Animated.View
-      style={[
-        styles.orbOuter,
-        { width: size, height: size, borderRadius: size / 2 },
-        gradientBackground([palette[0] + 'CC', palette[1] + '99', palette[2] + 'DD'], 150),
-        style,
-      ]}>
-      <View style={styles.orbInner}>
-        <View style={[styles.orbLight, { backgroundColor: palette[0] }]} />
-      </View>
+    <Animated.View style={[{ width: size, height: size }, animated]}>
+      <Canvas style={StyleSheet.absoluteFill}>
+        <Path path={path} color={palette[0] + '52'}>
+          <BlurMask blur={8 + bands.bass * 8} style="normal" />
+        </Path>
+        <Path path={path}>
+          <RadialGradient
+            c={vec(size * 0.36, size * 0.29)}
+            r={size * 0.66}
+            colors={[
+              palette[0] + 'F0',
+              palette[1] + 'C8',
+              palette[2] + 'B8',
+              '#090D12F2',
+            ]}
+          />
+        </Path>
+        <Path
+          path={path}
+          style="stroke"
+          strokeWidth={1 + bands.high * 0.7}
+          color={'rgba(255,255,255,' + (0.28 + bands.high * 0.22) + ')'}
+        />
+        <Circle c={vec(size * 0.37, size * 0.31)} r={size * (0.11 + bands.high * 0.018)}>
+          <RadialGradient
+            c={vec(size * 0.35, size * 0.29)}
+            r={size * 0.16}
+            colors={['rgba(255,255,255,0.58)', 'rgba(255,255,255,0)']}
+          />
+        </Circle>
+        {bands.high > 0.08 ? (
+          <>
+            <Circle c={vec(size * 0.72, size * 0.33)} r={1.1 + bands.high * 1.8} color={palette[0] + 'C0'} />
+            <Circle c={vec(size * 0.27, size * 0.69)} r={0.8 + bands.high * 1.4} color={palette[1] + 'A8'} />
+            <Circle c={vec(size * 0.68, size * 0.73)} r={0.7 + bands.transient * 2.0} color="rgba(255,255,255,0.48)" />
+          </>
+        ) : null}
+      </Canvas>
     </Animated.View>
   );
 }
@@ -336,7 +437,7 @@ export function NexusWaveform({
       onPress={(event) => {
         const next = event.nativeEvent.locationX / Math.max(1, width.value);
         onSeek(next);
-        Vibration.vibrate(3);
+        nexusHaptics.seek();
       }}
       style={styles.waveform}>
       {wave.map((height, index) => (
@@ -369,7 +470,7 @@ const styles = StyleSheet.create({
   surface: {
     overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: 'rgba(255,255,255,0.11)',
     elevation: 10,
   },
   surfaceHighlight: {
@@ -435,33 +536,17 @@ const styles = StyleSheet.create({
     top: '42%',
     transform: [{ rotate: '-14deg' }],
   },
+  artworkGlass: {
+    ...StyleSheet.absoluteFillObject,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.13)',
+    backgroundColor: 'rgba(255,255,255,0.018)',
+  },
   aura: {
     position: 'absolute',
     opacity: 0.28,
     elevation: 0,
-  },
-  orbOuter: {
-    padding: 7,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.25)',
-    elevation: 12,
-  },
-  orbInner: {
-    flex: 1,
-    overflow: 'hidden',
-    borderRadius: 999,
-    backgroundColor: 'rgba(5,8,10,0.32)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.18)',
-  },
-  orbLight: {
-    position: 'absolute',
-    width: '55%',
-    height: '55%',
-    borderRadius: 999,
-    top: '4%',
-    left: '8%',
-    opacity: 0.55,
   },
   waveform: {
     height: 44,
