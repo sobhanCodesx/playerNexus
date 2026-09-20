@@ -107,6 +107,7 @@ const PlayerActionsContext = createContext<PlayerActionsContextValue | null>(nul
 
 export function PlayerProvider({ children }: PropsWithChildren) {
   const { settings, effectiveVisualQuality } = useNexusSettings();
+  const expoGoRuntime = isExpoGoRuntime();
   const quality = getNexusQualityProfile(effectiveVisualQuality);
   const audioPlayer = useAudioPlayer(null, { updateInterval: effectiveVisualQuality === 'ultra' ? 70 : 100 });
   const audioStatus = useAudioPlayerStatus(audioPlayer);
@@ -217,13 +218,13 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       if (transitionTimer.current) clearInterval(transitionTimer.current);
       transitionPlayer.current?.remove();
       transitionPlayer.current = null;
-      audioPlayer.clearLockScreenControls();
+      if (!expoGoRuntime) audioPlayer.clearLockScreenControls();
       if (preloadedUri.current) {
         clearPreloadedSource(preloadedUri.current).catch(() => undefined);
         preloadedUri.current = null;
       }
     };
-  }, [audioPlayer]);
+  }, [audioPlayer, expoGoRuntime]);
 
   useEffect(() => {
     if (!settings.gapless || !isRealTrack || !queue.length) return;
@@ -275,7 +276,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     return () => {
       active = false;
     };
-  }, []);
+  }, [expoGoRuntime]);
 
   useEffect(() => {
     setAudioModeAsync({
@@ -427,27 +428,31 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     if (!isRealTrack) {
       audioPlayer.pause();
-      audioPlayer.clearLockScreenControls();
+      if (!expoGoRuntime) audioPlayer.clearLockScreenControls();
       return;
     }
 
     audioPlayer.replace({ uri: track.uri! });
-    audioPlayer.setActiveForLockScreen(
-      true,
-      {
-        title: track.title,
-        artist: track.artist,
-        albumTitle: track.album,
-        artworkUrl: track.artworkUri ?? undefined,
-      },
-      {
-        isLiveStream: false,
-        showSeekBackward: false,
-        showSeekForward: false,
-      },
-    );
+
+    if (!expoGoRuntime) {
+      audioPlayer.setActiveForLockScreen(
+        true,
+        {
+          title: track.title,
+          artist: track.artist,
+          albumTitle: track.album,
+          artworkUrl: track.artworkUri ?? undefined,
+        },
+        {
+          isLiveStream: false,
+          showSeekBackward: false,
+          showSeekForward: false,
+        },
+      );
+    }
+
     if (playIntent.current) audioPlayer.play();
-  }, [audioPlayer, isRealTrack, track.id, track.uri]);
+  }, [audioPlayer, expoGoRuntime, isRealTrack, track.id, track.uri]);
 
   useEffect(() => {
     const restore = pendingRestore.current;
@@ -503,14 +508,22 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   }, [audioPlayer, audioStatus.isLoaded, track.id]);
 
   useEffect(() => {
-    if (!isRealTrack) return;
+    if (!isRealTrack || expoGoRuntime) return;
     audioPlayer.updateLockScreenMetadata({
       title: track.title,
       artist: track.artist,
       albumTitle: track.album,
       artworkUrl: track.artworkUri ?? undefined,
     });
-  }, [audioPlayer, isRealTrack, track.title, track.artist, track.album, track.artworkUri]);
+  }, [
+    audioPlayer,
+    expoGoRuntime,
+    isRealTrack,
+    track.title,
+    track.artist,
+    track.album,
+    track.artworkUri,
+  ]);
 
   useEffect(() => {
     if (!audioStatus.didJustFinish || !isRealTrack || transitioningRef.current) return;
@@ -667,7 +680,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   }, [sessionHydrated]);
 
   const ensureNotificationPermission = useCallback(() => {
-    if (Platform.OS !== 'android' || notificationAsked.current) return;
+    if (Platform.OS !== 'android' || expoGoRuntime || notificationAsked.current) return;
     notificationAsked.current = true;
     requestNotificationPermissionsAsync().catch(() => undefined);
   }, []);
@@ -833,12 +846,14 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       } else {
         playIntent.current = true;
         ensureNotificationPermission();
-        audioPlayer.setActiveForLockScreen(true, {
-          title: track.title,
-          artist: track.artist,
-          albumTitle: track.album,
-          artworkUrl: track.artworkUri ?? undefined,
-        });
+        if (!expoGoRuntime) {
+          audioPlayer.setActiveForLockScreen(true, {
+            title: track.title,
+            artist: track.artist,
+            albumTitle: track.album,
+            artworkUrl: track.artworkUri ?? undefined,
+          });
+        }
         audioPlayer.play();
       }
       return;
@@ -852,6 +867,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     audioStatus.playing,
     cancelTransition,
     ensureNotificationPermission,
+    expoGoRuntime,
     isRealTrack,
     track,
   ]);
@@ -1001,7 +1017,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     },
     scanLibrary,
     chooseMusicFiles,
-    isExpoGoRuntime: isExpoGoRuntime(),
+    isExpoGoRuntime: expoGoRuntime,
     enableAudioReactive,
     hydrateArtworkWindow,
   }), [
@@ -1040,6 +1056,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     closePlayer,
     scanLibrary,
     chooseMusicFiles,
+    expoGoRuntime,
     enableAudioReactive,
     hydrateArtworkWindow,
   ]);
