@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -7,24 +7,29 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { useRouter } from 'expo-router';
 
+import type { Album, Artist, Track } from '@/data/library';
 import { nexusTokens } from '@/design/nexus-tokens';
-import { NexusAlbumTile, NexusArtistBubble, NexusTrackRow } from '@/components/nexus/nexus-cards';
+import { NexusAlbumTile, NexusArtistBubble } from '@/components/nexus/nexus-cards';
+import { NexusTrackList } from '@/components/nexus/nexus-track-list';
 import { NexusIcon, NexusSurface, NexusText } from '@/components/nexus/nexus-primitives';
 import { NexusScreen } from '@/components/nexus/nexus-screen';
-import { usePlayer } from '@/providers/player-provider';
+import { usePlayer, usePlayerActions } from '@/providers/player-provider';
 import { useNexusCollections } from '@/providers/collections-provider';
 
 const tabs = ['Songs', 'Albums', 'Artists', 'Playlists', 'Folders'] as const;
 const sortModes = ['Recently added', 'Title', 'Artist', 'Album', 'Most played'] as const;
 type Tab = (typeof tabs)[number];
 type SortMode = (typeof sortModes)[number];
+type FolderItem = { name: string; count: number };
 
 export default function LibraryScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const player = usePlayer();
+  const { hydrateArtworkWindow } = usePlayerActions();
   const collections = useNexusCollections();
   const tracks = player.libraryTracks;
   const albums = player.libraryAlbums;
@@ -34,6 +39,7 @@ export default function LibraryScreen() {
   const [creating, setCreating] = useState(false);
   const [playlistName, setPlaylistName] = useState('');
   const albumWidth = Math.min(164, (width - 56) / 2);
+  const artistSize = Math.min(92, Math.max(72, (width - 92) / 3));
 
   const sortedTracks = useMemo(() => {
     const next = [...tracks];
@@ -41,12 +47,21 @@ export default function LibraryScreen() {
     if (sort === 'Artist') return next.sort((a, b) => a.artist.localeCompare(b.artist) || a.title.localeCompare(b.title));
     if (sort === 'Album') return next.sort((a, b) => a.album.localeCompare(b.album) || a.title.localeCompare(b.title));
     if (sort === 'Most played') {
-      return next.sort((a, b) => (player.playCounts[b.id] ?? 0) - (player.playCounts[a.id] ?? 0) || a.title.localeCompare(b.title));
+      return next.sort(
+        (a, b) =>
+          (player.playCounts[b.id] ?? 0) - (player.playCounts[a.id] ?? 0) ||
+          a.title.localeCompare(b.title),
+      );
     }
     return next.sort((a, b) => (b.dateAdded ?? 0) - (a.dateAdded ?? 0));
   }, [player.playCounts, sort, tracks]);
 
-  const folders = useMemo(() => {
+  const byId = useMemo(
+    () => new Map(tracks.map((track) => [track.id, track] as const)),
+    [tracks],
+  );
+
+  const folders = useMemo<FolderItem[]>(() => {
     const groups = new Map<string, number>();
     tracks.forEach((track) => {
       const folder = track.folder?.replace(/\/$/, '') || 'Local files';
@@ -55,6 +70,23 @@ export default function LibraryScreen() {
     return [...groups.entries()]
       .map(([name, count]) => ({ name, count }))
       .sort((a, b) => a.name.localeCompare(b.name));
+  }, [tracks]);
+
+  const albumSeedTracks = useMemo(() => {
+    const map = new Map<string, Track>();
+    albums.forEach((album) => {
+      const seed = album.trackIds.map((id) => byId.get(id)).find(Boolean);
+      if (seed) map.set(album.id, seed);
+    });
+    return map;
+  }, [albums, byId]);
+
+  const artistSeedTracks = useMemo(() => {
+    const map = new Map<string, Track>();
+    tracks.forEach((track) => {
+      if (!map.has(track.artist)) map.set(track.artist, track);
+    });
+    return map;
   }, [tracks]);
 
   const createPlaylist = () => {
@@ -66,8 +98,84 @@ export default function LibraryScreen() {
     router.push({ pathname: '/playlist', params: { id } });
   };
 
+  const playSortedTrack = useCallback(
+    (track: Track) => {
+      player.playQueue(sortedTracks, track.id);
+    },
+    [player.playQueue, sortedTracks],
+  );
+
+  const onAlbumsViewable = useCallback(
+    ({ viewableItems }: { viewableItems: Array<{ item: Album }> }) => {
+      hydrateArtworkWindow(
+        viewableItems
+          .map(({ item }) => albumSeedTracks.get(item.id))
+          .filter((item): item is Track => Boolean(item)),
+      );
+    },
+    [albumSeedTracks, hydrateArtworkWindow],
+  );
+
+  const onArtistsViewable = useCallback(
+    ({ viewableItems }: { viewableItems: Array<{ item: Artist }> }) => {
+      hydrateArtworkWindow(
+        viewableItems
+          .map(({ item }) => artistSeedTracks.get(item.name))
+          .filter((candidate): candidate is Track => Boolean(candidate)),
+      );
+    },
+    [artistSeedTracks, hydrateArtworkWindow],
+  );
+
+  const renderAlbum = useCallback(
+    ({ item }: { item: Album }) => (
+      <View style={styles.albumCell}>
+        <NexusAlbumTile album={item} width={albumWidth} />
+      </View>
+    ),
+    [albumWidth],
+  );
+
+  const renderArtist = useCallback(
+    ({ item }: { item: Artist }) => (
+      <View style={styles.artistCell}>
+        <NexusArtistBubble artist={item} size={artistSize} />
+      </View>
+    ),
+    [artistSize],
+  );
+
+  const renderFolder = useCallback(
+    ({ item, index }: { item: FolderItem; index: number }) => (
+      <Pressable
+        onPress={() => router.push({ pathname: '/folder', params: { name: item.name } })}
+        style={styles.folderRow}>
+        <View style={styles.folderIndex}>
+          <NexusText variant="micro" muted>{String(index + 1).padStart(2, '0')}</NexusText>
+        </View>
+        <View style={{ flex: 1, gap: 2 }}>
+          <NexusText numberOfLines={1}>{item.name.split('/').filter(Boolean).at(-1) ?? item.name}</NexusText>
+          <NexusText variant="caption" muted numberOfLines={1}>{item.name}</NexusText>
+        </View>
+        <NexusText variant="micro" muted>{item.count} TRACKS</NexusText>
+      </Pressable>
+    ),
+    [router],
+  );
+
+  const libraryCount =
+    tab === 'Songs'
+      ? tracks.length + ' tracks'
+      : tab === 'Albums'
+        ? albums.length + ' albums'
+        : tab === 'Artists'
+          ? artists.length + ' artists'
+          : tab === 'Playlists'
+            ? collections.playlists.length + ' playlists'
+            : folders.length + ' folders';
+
   return (
-    <NexusScreen>
+    <NexusScreen scroll={false} contentContainerStyle={styles.screen}>
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
           <NexusText variant="micro" muted style={styles.eyebrow}>LOCAL COLLECTION</NexusText>
@@ -108,17 +216,7 @@ export default function LibraryScreen() {
       ) : null}
 
       <View style={styles.utilityRow}>
-        <NexusText variant="caption" muted>
-          {tab === 'Songs'
-            ? tracks.length + ' tracks'
-            : tab === 'Albums'
-              ? albums.length + ' albums'
-              : tab === 'Artists'
-                ? artists.length + ' artists'
-                : tab === 'Playlists'
-                  ? collections.playlists.length + ' playlists'
-                  : folders.length + ' folders'}
-        </NexusText>
+        <NexusText variant="caption" muted>{libraryCount}</NexusText>
 
         {tab === 'Songs' ? (
           <Pressable
@@ -140,31 +238,45 @@ export default function LibraryScreen() {
       </View>
 
       {tab === 'Songs' ? (
-        <View style={styles.list}>
-          {sortedTracks.map((track, index) => (
-            <NexusTrackRow key={track.id} track={track} index={index} />
-          ))}
-        </View>
+        <NexusTrackList
+          tracks={sortedTracks}
+          onTrackPress={playSortedTrack}
+          contentContainerStyle={styles.virtualContent}
+        />
       ) : null}
 
       {tab === 'Albums' ? (
-        <View style={styles.albumGrid}>
-          {albums.map((album) => (
-            <NexusAlbumTile key={album.id} album={album} width={albumWidth} />
-          ))}
-        </View>
+        <FlashList
+          key="albums"
+          data={albums}
+          numColumns={2}
+          renderItem={renderAlbum}
+          keyExtractor={(album) => album.id}
+          contentContainerStyle={styles.virtualContent}
+          showsVerticalScrollIndicator={false}
+          onViewableItemsChanged={onAlbumsViewable}
+          viewabilityConfig={{ itemVisiblePercentThreshold: 14 }}
+          drawDistance={480}
+        />
       ) : null}
 
       {tab === 'Artists' ? (
-        <View style={styles.artistGrid}>
-          {artists.map((artist) => (
-            <NexusArtistBubble key={artist.id} artist={artist} size={92} />
-          ))}
-        </View>
+        <FlashList
+          key="artists"
+          data={artists}
+          numColumns={3}
+          renderItem={renderArtist}
+          keyExtractor={(artist) => artist.id}
+          contentContainerStyle={styles.virtualContent}
+          showsVerticalScrollIndicator={false}
+          onViewableItemsChanged={onArtistsViewable}
+          viewabilityConfig={{ itemVisiblePercentThreshold: 14 }}
+          drawDistance={420}
+        />
       ) : null}
 
       {tab === 'Playlists' ? (
-        <View style={styles.playlists}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.playlists}>
           {creating ? (
             <NexusSurface style={styles.composer} intensity="strong">
               <TextInput
@@ -188,10 +300,11 @@ export default function LibraryScreen() {
           ) : null}
 
           {collections.playlists.map((playlist, index) => {
-            const playlistTracks = playlist.trackIds
-              .map((id) => tracks.find((track) => track.id === id))
-              .filter(Boolean);
-            const palette = playlistTracks[0]?.palette ?? tracks[index % Math.max(1, tracks.length)]?.palette ?? player.track.palette;
+            const firstTrack = playlist.trackIds.map((id) => byId.get(id)).find(Boolean);
+            const palette =
+              firstTrack?.palette ??
+              tracks[index % Math.max(1, tracks.length)]?.palette ??
+              player.track.palette;
             return (
               <Pressable
                 key={playlist.id}
@@ -227,33 +340,27 @@ export default function LibraryScreen() {
               </Pressable>
             </NexusSurface>
           ) : null}
-        </View>
+        </ScrollView>
       ) : null}
 
       {tab === 'Folders' ? (
-        <View style={styles.folders}>
-          {folders.map((folder, index) => (
-            <Pressable
-              key={folder.name}
-              onPress={() => router.push({ pathname: '/folder', params: { name: folder.name } })}
-              style={styles.folderRow}>
-              <View style={styles.folderIndex}>
-                <NexusText variant="micro" muted>{String(index + 1).padStart(2, '0')}</NexusText>
-              </View>
-              <View style={{ flex: 1, gap: 2 }}>
-                <NexusText numberOfLines={1}>{folder.name.split('/').filter(Boolean).at(-1) ?? folder.name}</NexusText>
-                <NexusText variant="caption" muted numberOfLines={1}>{folder.name}</NexusText>
-              </View>
-              <NexusText variant="micro" muted>{folder.count} TRACKS</NexusText>
-            </Pressable>
-          ))}
-        </View>
+        <FlashList
+          key="folders"
+          data={folders}
+          renderItem={renderFolder}
+          keyExtractor={(folder) => folder.name}
+          contentContainerStyle={styles.virtualContent}
+          showsVerticalScrollIndicator={false}
+          drawDistance={420}
+        />
       ) : null}
     </NexusScreen>
   );
 }
 
 const styles = StyleSheet.create({
+  screen: { paddingBottom: 0 },
+  virtualContent: { paddingBottom: 28 },
   header: { minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 18 },
   eyebrow: { letterSpacing: 1.1, marginBottom: 4 },
   headerButton: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.06)' },
@@ -265,10 +372,9 @@ const styles = StyleSheet.create({
   utilityRow: { height: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   sort: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 8 },
   newAction: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 8 },
-  list: { marginTop: 2 },
-  albumGrid: { marginTop: 12, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 16 },
-  artistGrid: { marginTop: 18, flexDirection: 'row', flexWrap: 'wrap', gap: 24, justifyContent: 'space-around' },
-  playlists: { gap: 12 },
+  albumCell: { flex: 1, alignItems: 'center', paddingBottom: 18 },
+  artistCell: { flex: 1, alignItems: 'center', paddingBottom: 22 },
+  playlists: { gap: 12, paddingBottom: 28 },
   composer: { minHeight: 64, borderRadius: 23, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, gap: 10 },
   composerInput: { flex: 1, color: '#F4F6F7', fontSize: 16, fontWeight: '600', paddingVertical: 0 },
   createButton: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F3F5F6' },
@@ -281,7 +387,6 @@ const styles = StyleSheet.create({
   emptyOrbInner: { flex: 1, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.09)' },
   emptyCopy: { textAlign: 'center', maxWidth: 280 },
   emptyCTA: { marginTop: 8, height: 42, paddingHorizontal: 18, borderRadius: 21, backgroundColor: '#F3F5F6', alignItems: 'center', justifyContent: 'center' },
-  folders: { gap: 2 },
   folderRow: { minHeight: 66, flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(255,255,255,0.065)' },
   folderIndex: { width: 34, height: 34, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.045)' },
 });
