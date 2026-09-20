@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AccessibilityInfo, Platform } from 'react-native';
 import {
   createContext,
   PropsWithChildren,
@@ -30,6 +31,9 @@ type SettingsContextValue = {
   hydrated: boolean;
   settings: NexusSettings;
   effectiveVisualQuality: NexusVisualQuality;
+  effectiveReduceMotion: boolean;
+  screenReaderEnabled: boolean;
+  highTextContrastEnabled: boolean;
   updateSetting: <K extends keyof NexusSettings>(key: K, value: NexusSettings[K]) => void;
   completeOnboarding: (themeMode: NexusThemeMode) => void;
   resetOnboarding: () => void;
@@ -56,12 +60,59 @@ export function NexusSettingsProvider({ children }: PropsWithChildren) {
   const [effectiveVisualQuality, setEffectiveVisualQuality] = useState<NexusVisualQuality>(
     defaults.visualQuality,
   );
+  const [systemReduceMotion, setSystemReduceMotion] = useState(false);
+  const [screenReaderEnabled, setScreenReaderEnabled] = useState(false);
+  const [highTextContrastEnabled, setHighTextContrastEnabled] = useState(false);
   const performanceWindow = useRef({
     lastFrameAt: 0,
     frames: 0,
     stalledFrames: 0,
     recoveryWindows: 0,
   });
+
+  useEffect(() => {
+    let active = true;
+
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then((enabled) => {
+        if (active) setSystemReduceMotion(enabled);
+      })
+      .catch(() => undefined);
+    AccessibilityInfo.isScreenReaderEnabled()
+      .then((enabled) => {
+        if (active) setScreenReaderEnabled(enabled);
+      })
+      .catch(() => undefined);
+    if (Platform.OS === 'android') {
+      AccessibilityInfo.isHighTextContrastEnabled()
+        .then((enabled) => {
+          if (active) setHighTextContrastEnabled(enabled);
+        })
+        .catch(() => undefined);
+    }
+
+    const reduceMotion = AccessibilityInfo.addEventListener(
+      'reduceMotionChanged',
+      setSystemReduceMotion,
+    );
+    const screenReader = AccessibilityInfo.addEventListener(
+      'screenReaderChanged',
+      setScreenReaderEnabled,
+    );
+    const highContrast = Platform.OS === 'android'
+      ? AccessibilityInfo.addEventListener(
+          'highTextContrastChanged',
+          setHighTextContrastEnabled,
+        )
+      : null;
+
+    return () => {
+      active = false;
+      reduceMotion.remove();
+      screenReader.remove();
+      highContrast?.remove();
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -170,20 +221,28 @@ export function NexusSettingsProvider({ children }: PropsWithChildren) {
     setSettings((current) => ({ ...current, onboardingComplete: false }));
   }, []);
 
+  const effectiveReduceMotion = settings.reduceMotion || systemReduceMotion;
+
   const value = useMemo<SettingsContextValue>(
     () => ({
       hydrated,
       settings,
       effectiveVisualQuality,
+      effectiveReduceMotion,
+      screenReaderEnabled,
+      highTextContrastEnabled,
       updateSetting,
       completeOnboarding,
       resetOnboarding,
     }),
     [
       completeOnboarding,
+      effectiveReduceMotion,
       effectiveVisualQuality,
+      highTextContrastEnabled,
       hydrated,
       resetOnboarding,
+      screenReaderEnabled,
       settings,
       updateSetting,
     ],
