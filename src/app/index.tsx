@@ -52,8 +52,15 @@ export default function HomeScreen() {
             <NexusText variant="caption">Your music is still outside Nexus</NexusText>
             <NexusText variant="micro" muted>GRANT AUDIO ACCESS · LOCAL ONLY</NexusText>
           </View>
-          <Pressable onPress={() => player.scanLibrary(true)} style={styles.scanButton}>
-            <NexusText variant="micro" style={{ color: '#111519' }}>SCAN MUSIC</NexusText>
+          <Pressable
+            onPress={() => {
+              if (player.isExpoGoRuntime) player.chooseMusicFiles();
+              else player.scanLibrary(true);
+            }}
+            style={styles.scanButton}>
+            <NexusText variant="micro" style={{ color: '#111519' }}>
+              {player.isExpoGoRuntime ? 'CHOOSE MUSIC' : 'SCAN MUSIC'}
+            </NexusText>
           </Pressable>
         </NexusSurface>
       ) : null}

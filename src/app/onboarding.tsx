@@ -57,7 +57,11 @@ export default function OnboardingScreen() {
 
   const requestLibrary = async () => {
     setRequesting(true);
-    await player.scanLibrary(true);
+    if (player.isExpoGoRuntime) {
+      await player.chooseMusicFiles();
+    } else {
+      await player.scanLibrary(true);
+    }
     setRequesting(false);
     next();
   };
@@ -185,12 +189,26 @@ export default function OnboardingScreen() {
           <View style={styles.actionStack}>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={player.libraryStatus === 'ready' ? 'Continue' : 'Allow music access'}
+              accessibilityLabel={
+                player.libraryStatus === 'ready'
+                  ? 'Continue'
+                  : player.isExpoGoRuntime
+                    ? 'Choose music files'
+                    : 'Allow music access'
+              }
               disabled={requesting}
               onPress={requestLibrary}
               style={styles.primary}>
               <NexusText variant="caption" style={styles.primaryText}>
-                {requesting ? 'Scanning…' : player.libraryStatus === 'ready' ? 'Continue' : 'Allow music access'}
+                {requesting
+                  ? player.isExpoGoRuntime
+                    ? 'Opening files…'
+                    : 'Scanning…'
+                  : player.libraryStatus === 'ready'
+                    ? 'Continue'
+                    : player.isExpoGoRuntime
+                      ? 'Choose music'
+                      : 'Allow music access'}
               </NexusText>
             </Pressable>
             <Pressable accessibilityRole="button" accessibilityLabel="Not now, use preview library" onPress={next} style={styles.secondary}>
