@@ -1,0 +1,25 @@
+name: Validate Nexus
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: TypeScript
+        run: npm run typecheck
+      - name: Expo prebuild Android
+        run: npx expo prebuild --platform android --no-install --clean
