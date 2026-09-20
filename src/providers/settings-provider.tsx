@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AccessibilityInfo, Platform } from 'react-native';
+import { AccessibilityInfo, AppState, Platform } from 'react-native';
 import {
   createContext,
   PropsWithChildren,
@@ -99,22 +99,25 @@ export function NexusSettingsProvider({ children }: PropsWithChildren) {
       'screenReaderChanged',
       setScreenReaderEnabled,
     );
+    const refreshHighContrast = () => {
+      if (Platform.OS !== 'android') return;
+      AccessibilityInfo.isHighTextContrastEnabled()
+        .then(setHighTextContrastEnabled)
+        .catch(() => undefined);
+    };
     const accessibilityService = Platform.OS === 'android'
-      ? AccessibilityInfo.addEventListener(
-          'accessibilityServiceChanged',
-          () => {
-            AccessibilityInfo.isHighTextContrastEnabled()
-              .then(setHighTextContrastEnabled)
-              .catch(() => undefined);
-          },
-        )
+      ? AccessibilityInfo.addEventListener('accessibilityServiceChanged', refreshHighContrast)
       : null;
+    const appState = AppState.addEventListener('change', (state) => {
+      if (state === 'active') refreshHighContrast();
+    });
 
     return () => {
       active = false;
       reduceMotion.remove();
       screenReader.remove();
       accessibilityService?.remove();
+      appState.remove();
     };
   }, []);
 

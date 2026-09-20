@@ -15,10 +15,11 @@ type SettingRowProps = {
   subtitle?: string;
   value?: boolean;
   onValueChange?: (value: boolean) => void;
+  disabled?: boolean;
   icon: { ios: string; android: string };
 };
 
-function SettingRow({ title, subtitle, value, onValueChange, icon }: SettingRowProps) {
+function SettingRow({ title, subtitle, value, onValueChange, disabled, icon }: SettingRowProps) {
   const theme = usePlayer().theme;
   return (
     <View style={styles.row}>
@@ -33,6 +34,9 @@ function SettingRow({ title, subtitle, value, onValueChange, icon }: SettingRowP
         <Switch
           value={value}
           onValueChange={onValueChange}
+          disabled={disabled}
+          accessibilityLabel={title}
+          accessibilityHint={subtitle}
           thumbColor={value ? '#F5F6F7' : '#B0B4B8'}
           trackColor={{ false: '#343A40', true: theme.primaryAmbient }}
         />
@@ -61,7 +65,15 @@ const qualityOptions: Array<{ id: NexusVisualQuality; label: string }> = [
 export default function SettingsScreen() {
   const router = useRouter();
   const player = usePlayer();
-  const { settings, updateSetting, resetOnboarding } = useNexusSettings();
+  const {
+    effectiveReduceMotion,
+    highTextContrastEnabled,
+    screenReaderEnabled,
+    settings,
+    updateSetting,
+    resetOnboarding,
+  } = useNexusSettings();
+  const systemReduceMotion = effectiveReduceMotion && !settings.reduceMotion;
 
   return (
     <NexusScreen>
@@ -81,6 +93,9 @@ export default function SettingsScreen() {
             return (
               <Pressable
                 key={item.id}
+                accessibilityRole="button"
+                accessibilityLabel={item.label + ' theme'}
+                accessibilityState={{ selected }}
                 onPress={() => updateSetting('themeMode', item.id)}
                 style={[styles.segment, selected && styles.segmentActive]}>
                 <NexusText variant="micro" style={{ color: selected ? '#F7F8F9' : '#7F878E' }}>{item.label.toUpperCase()}</NexusText>
@@ -91,8 +106,13 @@ export default function SettingsScreen() {
         <NexusSurface style={styles.group} intensity="soft">
           <SettingRow
             title="Reduce motion"
-            subtitle="Preserve state changes, remove ambient drift"
-            value={settings.reduceMotion}
+            subtitle={
+              systemReduceMotion
+                ? 'Enabled by Android system preference'
+                : 'Preserve state changes, remove ambient drift'
+            }
+            value={effectiveReduceMotion}
+            disabled={systemReduceMotion}
             onValueChange={(value) => updateSetting('reduceMotion', value)}
             icon={{ ios: 'figure.walk.motion', android: 'motion_photos_off' }}
           />
@@ -149,6 +169,9 @@ export default function SettingsScreen() {
                   return (
                     <Pressable
                       key={seconds}
+                      accessibilityRole="button"
+                      accessibilityLabel={seconds === 0 ? 'Crossfade off' : 'Crossfade ' + seconds + ' seconds'}
+                      accessibilityState={{ selected: active }}
                       onPress={() => updateSetting('crossfadeSeconds', seconds)}
                       style={[styles.crossfadeSegment, active && styles.crossfadeSegmentActive]}>
                       <NexusText
@@ -173,6 +196,9 @@ export default function SettingsScreen() {
             return (
               <Pressable
                 key={item.id}
+                accessibilityRole="button"
+                accessibilityLabel={item.label + ' visual quality'}
+                accessibilityState={{ selected }}
                 onPress={() => updateSetting('visualQuality', item.id)}
                 style={[styles.qualityItem, selected && styles.qualityActive]}>
                 <NexusText variant="caption" style={{ color: selected ? '#F7F8F9' : '#7F878E' }}>{item.label}</NexusText>
@@ -211,6 +237,22 @@ export default function SettingsScreen() {
           </NexusSurface>
         </Pressable>
       </View>
+
+      {(screenReaderEnabled || highTextContrastEnabled || systemReduceMotion) ? (
+        <NexusSurface
+          accessibilityRole="summary"
+          style={styles.accessibilityStatus}
+          intensity="soft">
+          <NexusText variant="caption">System accessibility is active</NexusText>
+          <NexusText variant="micro" muted>
+            {[
+              screenReaderEnabled ? 'TALKBACK' : null,
+              highTextContrastEnabled ? 'HIGH CONTRAST' : null,
+              systemReduceMotion ? 'REDUCE MOTION' : null,
+            ].filter(Boolean).join(' · ')}
+          </NexusText>
+        </NexusSurface>
+      ) : null}
 
       <View style={styles.about}>
         <NexusText variant="heading">NEXUS PLAYER</NexusText>
@@ -276,6 +318,14 @@ const styles = StyleSheet.create({
   crossfadeSegment: { flex: 1, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.035)' },
   crossfadeSegmentActive: { backgroundColor: 'rgba(255,255,255,0.11)' },
   qualityHint: { lineHeight: 18, paddingHorizontal: 2 },
+  accessibilityStatus: {
+    marginTop: 30,
+    minHeight: 64,
+    borderRadius: 22,
+    paddingHorizontal: 16,
+    justifyContent: 'center',
+    gap: 3,
+  },
   replay: {
     minHeight: 68,
     borderRadius: 24,

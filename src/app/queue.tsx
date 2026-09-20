@@ -65,7 +65,12 @@ function QueueRow({
           <NexusIcon ios="line.3.horizontal" android="drag_handle" size={19} color="#667078" />
         </View>
 
-        <Pressable onPress={onPlay} style={styles.trackPress}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={(current ? 'Now playing, ' : '') + track.title + ' by ' + track.artist}
+          accessibilityHint="Play this track from the session queue"
+          onPress={onPlay}
+          style={styles.trackPress}>
           <NexusArtwork
             palette={track.palette}
             artworkUri={track.artworkUri}

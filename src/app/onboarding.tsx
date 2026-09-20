@@ -32,15 +32,15 @@ export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const player = usePlayer();
-  const { completeOnboarding } = useNexusSettings();
+  const { completeOnboarding, effectiveReduceMotion } = useNexusSettings();
   const [step, setStep] = useState(0);
   const [theme, setTheme] = useState<NexusThemeMode>('dynamic');
   const [requesting, setRequesting] = useState(false);
   const phase = useSharedValue(0);
 
   useEffect(() => {
-    phase.value = withTiming(step, { duration: 420 });
-  }, [phase, step]);
+    phase.value = withTiming(step, { duration: effectiveReduceMotion ? 0 : 420 });
+  }, [effectiveReduceMotion, phase, step]);
 
   const orbStyle = useAnimatedStyle(() => ({
     transform: [
@@ -139,6 +139,10 @@ export default function OnboardingScreen() {
                 return (
                   <Pressable
                     key={item.id}
+                    accessibilityRole="radio"
+                    accessibilityLabel={item.label}
+                    accessibilityHint={item.note}
+                    accessibilityState={{ selected }}
                     onPress={() => {
                       nexusHaptics.transport();
                       setTheme(item.id);
@@ -164,26 +168,31 @@ export default function OnboardingScreen() {
 
       <View style={styles.bottom}>
         {step === 0 ? (
-          <Pressable onPress={next} style={styles.primary}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Enter Nexus" onPress={next} style={styles.primary}>
             <NexusText variant="caption" style={styles.primaryText}>Enter Nexus</NexusText>
           </Pressable>
         ) : null}
 
         {step === 1 ? (
           <View style={styles.actionStack}>
-            <Pressable disabled={requesting} onPress={requestLibrary} style={styles.primary}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={player.libraryStatus === 'ready' ? 'Continue' : 'Allow music access'}
+              disabled={requesting}
+              onPress={requestLibrary}
+              style={styles.primary}>
               <NexusText variant="caption" style={styles.primaryText}>
                 {requesting ? 'Scanning…' : player.libraryStatus === 'ready' ? 'Continue' : 'Allow music access'}
               </NexusText>
             </Pressable>
-            <Pressable onPress={next} style={styles.secondary}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Not now, use preview library" onPress={next} style={styles.secondary}>
               <NexusText variant="caption" muted>Not now — use the preview library</NexusText>
             </Pressable>
           </View>
         ) : null}
 
         {step === 2 ? (
-          <Pressable onPress={finish} style={styles.primary}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Start listening" onPress={finish} style={styles.primary}>
             <NexusText variant="caption" style={styles.primaryText}>Start listening</NexusText>
           </Pressable>
         ) : null}
