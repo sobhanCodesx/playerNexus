@@ -44,17 +44,28 @@ export default function AlbumScreen() {
       <View style={styles.actions}>
         <Pressable
           onPress={() => {
-            player.playTrack(albumTracks[0]);
+            player.playQueue(albumTracks, albumTracks[0]?.id);
             player.openPlayer();
           }}
           style={styles.play}>
           <NexusIcon ios="play.fill" android="play_arrow" size={24} color="#111519" />
           <NexusText variant="caption" style={{ color:'#111519' }}>Play album</NexusText>
         </Pressable>
-        <View style={styles.secondary}>
+        <Pressable
+          disabled={!albumTracks.length}
+          onPress={() => {
+            const shuffled = [...albumTracks];
+            for (let index = shuffled.length - 1; index > 0; index -= 1) {
+              const swap = Math.floor(Math.random() * (index + 1));
+              [shuffled[index], shuffled[swap]] = [shuffled[swap], shuffled[index]];
+            }
+            player.playQueue(shuffled);
+            player.openPlayer();
+          }}
+          style={styles.secondary}>
           <NexusIcon ios="shuffle" android="shuffle" size={19} />
           <NexusText variant="caption">Shuffle</NexusText>
-        </View>
+        </Pressable>
       </View>
 
       <View style={styles.trackList}>

@@ -17,7 +17,9 @@ import { usePlayer } from '@/providers/player-provider';
 import { useNexusCollections } from '@/providers/collections-provider';
 
 const tabs = ['Songs', 'Albums', 'Artists', 'Playlists', 'Folders'] as const;
+const sortModes = ['Recently added', 'Title', 'Artist', 'Album', 'Most played'] as const;
 type Tab = (typeof tabs)[number];
+type SortMode = (typeof sortModes)[number];
 
 export default function LibraryScreen() {
   const router = useRouter();
@@ -28,10 +30,21 @@ export default function LibraryScreen() {
   const albums = player.libraryAlbums;
   const artists = player.libraryArtists;
   const [tab, setTab] = useState<Tab>('Songs');
-  const [sort, setSort] = useState('Recently added');
+  const [sort, setSort] = useState<SortMode>('Recently added');
   const [creating, setCreating] = useState(false);
   const [playlistName, setPlaylistName] = useState('');
   const albumWidth = Math.min(164, (width - 56) / 2);
+
+  const sortedTracks = useMemo(() => {
+    const next = [...tracks];
+    if (sort === 'Title') return next.sort((a, b) => a.title.localeCompare(b.title));
+    if (sort === 'Artist') return next.sort((a, b) => a.artist.localeCompare(b.artist) || a.title.localeCompare(b.title));
+    if (sort === 'Album') return next.sort((a, b) => a.album.localeCompare(b.album) || a.title.localeCompare(b.title));
+    if (sort === 'Most played') {
+      return next.sort((a, b) => (player.playCounts[b.id] ?? 0) - (player.playCounts[a.id] ?? 0) || a.title.localeCompare(b.title));
+    }
+    return next.sort((a, b) => (b.dateAdded ?? 0) - (a.dateAdded ?? 0));
+  }, [player.playCounts, sort, tracks]);
 
   const folders = useMemo(() => {
     const groups = new Map<string, number>();
@@ -109,7 +122,9 @@ export default function LibraryScreen() {
 
         {tab === 'Songs' ? (
           <Pressable
-            onPress={() => setSort((value) => value === 'Recently added' ? 'Title' : 'Recently added')}
+            onPress={() =>
+              setSort((value) => sortModes[(sortModes.indexOf(value) + 1) % sortModes.length])
+            }
             style={styles.sort}>
             <NexusText variant="micro" muted>{sort.toUpperCase()}</NexusText>
             <NexusIcon ios="arrow.up.arrow.down" android="swap_vert" size={15} color="#9299A0" />
@@ -126,7 +141,7 @@ export default function LibraryScreen() {
 
       {tab === 'Songs' ? (
         <View style={styles.list}>
-          {tracks.map((track, index) => (
+          {sortedTracks.map((track, index) => (
             <NexusTrackRow key={track.id} track={track} index={index} />
           ))}
         </View>
