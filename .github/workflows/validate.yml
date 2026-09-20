@@ -17,9 +17,17 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
       - name: Install
         run: npm ci
       - name: TypeScript
         run: npm run typecheck
       - name: Expo prebuild Android
         run: npx expo prebuild --platform android --no-install --clean
+      - name: Compile Android debug
+        working-directory: android
+        run: ./gradlew :app:assembleDebug --no-daemon
