@@ -46,6 +46,11 @@ import {
 
 export type LibraryStatus = 'checking' | 'permission' | 'scanning' | 'ready' | 'empty' | 'error';
 
+type PlayerActionsContextValue = {
+  playTrack: (track: Track) => void;
+  hydrateArtworkWindow: (tracks: Track[]) => void;
+};
+
 type PlayerContextValue = {
   track: Track;
   queue: Track[];
@@ -88,9 +93,11 @@ type PlayerContextValue = {
   moveQueueItem: (from: number, to: number) => void;
   scanLibrary: (requestPermission?: boolean) => Promise<void>;
   enableAudioReactive: () => Promise<boolean>;
+  hydrateArtworkWindow: (tracks: Track[]) => void;
 };
 
 const PlayerContext = createContext<PlayerContextValue | null>(null);
+const PlayerActionsContext = createContext<PlayerActionsContextValue | null>(null);
 
 export function PlayerProvider({ children }: PropsWithChildren) {
   const { settings } = useNexusSettings();
@@ -109,6 +116,10 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     trackId: string;
   } | null>(null);
   const preloadedUri = useRef<string | null>(null);
+  const artworkHydrated = useRef(new Set<string>());
+  const artworkPending = useRef(new Set<string>());
+  const artworkQueue = useRef<Track[]>([]);
+  const artworkWorkers = useRef(0);
   const pendingRestore = useRef<{ trackId: string; positionSec: number } | null>(null);
   const lastHistoryTrack = useRef<string | null>(null);
   const sessionPromise = useRef<Promise<NexusPlaybackSession> | null>(null);
@@ -481,36 +492,58 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     };
   }, [track.id, track.uri, track.source]);
 
+  const artworkKey = useCallback(
+    (item: Track) => item.albumId ? 'album:' + item.albumId : 'track:' + item.id,
+    [],
+  );
+
+  const pumpArtworkQueue = useCallback(() => {
+    while (artworkWorkers.current < 2 && artworkQueue.current.length) {
+      const item = artworkQueue.current.shift();
+      if (!item) break;
+      const key = item.albumId ? 'album:' + item.albumId : 'track:' + item.id;
+      artworkWorkers.current += 1;
+
+      resolveTrackArtwork(item)
+        .then((resolved) => {
+          const applyResolved = (candidate: Track) =>
+            candidate.albumId && item.albumId && candidate.albumId === item.albumId
+              ? { ...candidate, artworkUri: resolved.artworkUri, palette: resolved.palette }
+              : candidate.id === item.id
+                ? { ...candidate, artworkUri: resolved.artworkUri, palette: resolved.palette }
+                : candidate;
+
+          setQueue((current) => current.map(applyResolved));
+          setDeviceTracks((current) => current.map(applyResolved));
+          artworkHydrated.current.add(key);
+        })
+        .catch(() => {
+          artworkHydrated.current.add(key);
+        })
+        .finally(() => {
+          artworkPending.current.delete(key);
+          artworkWorkers.current = Math.max(0, artworkWorkers.current - 1);
+          pumpArtworkQueue();
+        });
+    }
+  }, []);
+
+  const hydrateArtworkWindow = useCallback((items: Track[]) => {
+    let queued = false;
+    for (const item of items.slice(0, 16)) {
+      if (item.source !== 'device' || item.artworkUri) continue;
+      const key = artworkKey(item);
+      if (artworkHydrated.current.has(key) || artworkPending.current.has(key)) continue;
+      artworkPending.current.add(key);
+      artworkQueue.current.push(item);
+      queued = true;
+    }
+    if (queued) pumpArtworkQueue();
+  }, [artworkKey, pumpArtworkQueue]);
+
   useEffect(() => {
-    if (!track || track.source !== 'device' || track.artworkUri) return;
-    let cancelled = false;
-    resolveTrackArtwork(track)
-      .then((resolved) => {
-        if (cancelled) return;
-        setQueue((current) =>
-          current.map((item) =>
-            item.albumId && item.albumId === track.albumId
-              ? { ...item, artworkUri: resolved.artworkUri, palette: resolved.palette }
-              : item.id === track.id
-                ? { ...item, artworkUri: resolved.artworkUri, palette: resolved.palette }
-                : item,
-          ),
-        );
-        setDeviceTracks((current) =>
-          current.map((item) =>
-            item.albumId && item.albumId === track.albumId
-              ? { ...item, artworkUri: resolved.artworkUri, palette: resolved.palette }
-              : item.id === track.id
-                ? { ...item, artworkUri: resolved.artworkUri, palette: resolved.palette }
-                : item,
-          ),
-        );
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [track.id, track.albumId, track.artworkUri, track.source]);
+    hydrateArtworkWindow([track]);
+  }, [hydrateArtworkWindow, track]);
 
   useEffect(() => {
     if (!isPlaying || lastHistoryTrack.current === track.id) return;
@@ -893,6 +926,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     },
     scanLibrary,
     enableAudioReactive,
+    hydrateArtworkWindow,
   }), [
     track,
     queue,
@@ -924,9 +958,25 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     seek,
     scanLibrary,
     enableAudioReactive,
+    hydrateArtworkWindow,
   ]);
 
-  return <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>;
+  const actions = useMemo<PlayerActionsContextValue>(
+    () => ({ playTrack, hydrateArtworkWindow }),
+    [hydrateArtworkWindow, playTrack],
+  );
+
+  return (
+    <PlayerActionsContext.Provider value={actions}>
+      <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>
+    </PlayerActionsContext.Provider>
+  );
+}
+
+export function usePlayerActions() {
+  const context = useContext(PlayerActionsContext);
+  if (!context) throw new Error('usePlayerActions must be used inside PlayerProvider');
+  return context;
 }
 
 export function usePlayer() {
