@@ -51,6 +51,12 @@ export function NexusPlayerLayer() {
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
+  const compactPlayer = height < 820;
+  const expandedArtworkSize = Math.max(
+    218,
+    Math.min(width - 64, compactPlayer ? 276 : 310, height * (compactPlayer ? 0.34 : 0.38)),
+  );
+  const expandedArtworkTop = insets.top + (compactPlayer ? 62 : 78);
   const expansion = useSharedValue(player.expanded ? 1 : 0);
   const playPulse = useSharedValue(0);
   const parallax = useNexusDeviceParallax(
@@ -111,12 +117,11 @@ export function NexusPlayerLayer() {
   }));
 
   const artStyle = useAnimatedStyle(() => {
-    const fullSize = Math.min(width - 64, 310);
     return {
-      left: interpolate(expansion.value, [0, 1], [12, (width - fullSize) / 2]),
-      top: interpolate(expansion.value, [0, 1], [12, insets.top + 86]),
-      width: interpolate(expansion.value, [0, 1], [48, fullSize]),
-      height: interpolate(expansion.value, [0, 1], [48, fullSize]),
+      left: interpolate(expansion.value, [0, 1], [12, (width - expandedArtworkSize) / 2]),
+      top: interpolate(expansion.value, [0, 1], [12, expandedArtworkTop]),
+      width: interpolate(expansion.value, [0, 1], [48, expandedArtworkSize]),
+      height: interpolate(expansion.value, [0, 1], [48, expandedArtworkSize]),
       borderRadius: interpolate(expansion.value, [0, 1], [14, 30]),
       transform: [
         { perspective: 900 },
@@ -295,7 +300,14 @@ export function NexusPlayerLayer() {
 
         <Animated.View
           pointerEvents={player.expanded ? 'auto' : 'none'}
-          style={[styles.fullContent, fullStyle, { paddingTop: insets.top + 18, paddingBottom: Math.max(22, insets.bottom + 10) }]}>
+          style={[
+            styles.fullContent,
+            fullStyle,
+            {
+              paddingTop: insets.top + (compactPlayer ? 10 : 18),
+              paddingBottom: Math.max(compactPlayer ? 12 : 22, insets.bottom + 8),
+            },
+          ]}>
           <View style={styles.topRow}>
             <NexusIconButton
               ios="chevron.down"
@@ -322,7 +334,7 @@ export function NexusPlayerLayer() {
 
           <View style={styles.spacer} />
 
-          <View style={styles.metaRow}>
+          <View style={[styles.metaRow, compactPlayer && styles.metaRowCompact]}>
             <View style={styles.trackMeta}>
               <NexusText variant="title" numberOfLines={1}>{player.track.title}</NexusText>
               <NexusText muted style={styles.artist}>{player.track.artist} · {player.track.album}</NexusText>
@@ -341,7 +353,7 @@ export function NexusPlayerLayer() {
             </Pressable>
           </View>
 
-          <View style={styles.waveBlock}>
+          <View style={[styles.waveBlock, compactPlayer && styles.waveBlockCompact]}>
             <NexusWaveform
               progress={player.progress}
               onSeek={player.seek}
@@ -351,11 +363,11 @@ export function NexusPlayerLayer() {
             />
             <View style={styles.timeRow}>
               <NexusText variant="micro" muted>{formatTime(player.currentTime)}</NexusText>
-              <NexusText variant="micro" muted>{player.track.duration}</NexusText>
+              <NexusText variant="micro" muted>{formatTime(player.duration)}</NexusText>
             </View>
           </View>
 
-          <View style={styles.controlField}>
+          <View style={[styles.controlField, compactPlayer && styles.controlFieldCompact]}>
             <NexusIconButton
               ios="shuffle"
               android="shuffle"
@@ -392,7 +404,7 @@ export function NexusPlayerLayer() {
             />
           </View>
 
-          <View style={styles.bottomModes}>
+          <View style={[styles.bottomModes, compactPlayer && styles.bottomModesCompact]}>
             <Pressable onPress={openLyrics} style={styles.modeLink}>
               <NexusText variant="caption">Lyrics</NexusText>
               <NexusText variant="micro" muted>FOCUS MODE</NexusText>
@@ -402,7 +414,12 @@ export function NexusPlayerLayer() {
               accessibilityLabel={player.audioReactiveEnabled ? 'Audio reactive visuals enabled' : 'Enable audio reactive visuals'}
               onPress={openVisualizer}
               style={styles.orbMode}>
-              <NexusOrb palette={player.track.palette} active={player.isPlaying} bands={player.audioBands} size={68} />
+              <NexusOrb
+                palette={player.track.palette}
+                active={player.isPlaying}
+                bands={player.audioBands}
+                size={compactPlayer ? 50 : 68}
+              />
               <NexusText variant="micro" muted>{player.audioReactiveEnabled ? 'AUDIO LIVE' : 'TAP FOR LIVE'}</NexusText>
             </Pressable>
             <Pressable onPress={openQueue} style={[styles.modeLink, styles.modeRight]}>
@@ -629,13 +646,16 @@ const styles = StyleSheet.create({
   },
   spacer: {
     flex: 1,
-    minHeight: 326,
+    minHeight: 0,
   },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
     marginTop: 12,
+  },
+  metaRowCompact: {
+    marginTop: 6,
   },
   trackMeta: { flex: 1, gap: 4 },
   artist: { fontSize: 14 },
@@ -648,6 +668,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.06)',
   },
   waveBlock: { marginTop: 20 },
+  waveBlockCompact: { marginTop: 10 },
   timeRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -659,11 +680,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  controlFieldCompact: {
+    marginTop: 10,
+  },
   bottomModes: {
     marginTop: 24,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  bottomModesCompact: {
+    marginTop: 12,
   },
   modeLink: { width: 92, gap: 2 },
   modeRight: { alignItems: 'flex-end' },
