@@ -17,7 +17,7 @@ export function NexusDock() {
   const path = usePathname();
   const insets = useSafeAreaInsets();
   const { expanded } = usePlayer();
-  if (expanded || path === '/visualizer') return null;
+  if (expanded || path === '/visualizer' || path === '/onboarding') return null;
 
   return (
     <NexusSurface style={[styles.dock, { bottom: insets.bottom + 12 }]} intensity="strong">

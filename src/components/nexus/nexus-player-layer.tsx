@@ -167,7 +167,7 @@ export function NexusPlayerLayer() {
 
   const artworkGesture = Gesture.Exclusive(favoriteTap, longPress, artworkSwipe);
 
-  if (pathname === '/visualizer') return null;
+  if (pathname === '/visualizer' || pathname === '/onboarding') return null;
 
   return (
     <GestureDetector gesture={verticalPan}>
