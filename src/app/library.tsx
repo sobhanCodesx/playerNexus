@@ -39,6 +39,7 @@ export default function LibraryScreen() {
   const { hydrateArtworkWindow } = usePlayerActions();
   const collections = useNexusCollections();
   const tracks = player.libraryTracks;
+  const hasDeviceMusic = tracks.some((item) => item.source === 'device');
   const albums = player.libraryAlbums;
   const artists = player.libraryArtists;
   const [tab, setTab] = useState<Tab>('Songs');
@@ -280,7 +281,9 @@ export default function LibraryScreen() {
         ))}
       </ScrollView>
 
-      {player.libraryStatus === 'permission' || player.libraryStatus === 'error' ? (
+      {player.libraryStatus === 'permission' ||
+      player.libraryStatus === 'error' ||
+      (player.isExpoGoRuntime && !hasDeviceMusic) ? (
         <NexusSurface style={styles.permission} intensity="strong">
           <View style={{ flex: 1, gap: 3 }}>
             <NexusText variant="caption">

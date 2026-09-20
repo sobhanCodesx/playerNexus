@@ -23,6 +23,7 @@ export default function HomeScreen() {
   const artists = player.libraryArtists;
   const recentTracks = player.recentTracks.filter((item) => item.id !== player.track.id);
   const recent = (recentTracks.length ? recentTracks : tracks.filter((item) => item.id !== player.track.id)).slice(0, 3);
+  const hasDeviceMusic = player.libraryTracks.some((item) => item.source === 'device');
   const favoriteCount = player.favoriteTracks.length;
   const favoritePalette = player.favoriteTracks[0]?.palette ?? player.track.palette;
   const greetingHour = new Date().getHours();
@@ -46,11 +47,15 @@ export default function HomeScreen() {
         />
       </View>
 
-      {player.libraryStatus === 'permission' ? (
+      {(player.libraryStatus === 'permission' || (player.isExpoGoRuntime && !hasDeviceMusic)) ? (
         <NexusSurface style={styles.libraryGate} intensity="strong">
           <View style={{ flex: 1, gap: 4 }}>
-            <NexusText variant="caption">Your music is still outside Nexus</NexusText>
-            <NexusText variant="micro" muted>GRANT AUDIO ACCESS · LOCAL ONLY</NexusText>
+            <NexusText variant="caption">
+              {player.isExpoGoRuntime ? 'Choose music to test Nexus' : 'Your music is still outside Nexus'}
+            </NexusText>
+            <NexusText variant="micro" muted>
+              {player.isExpoGoRuntime ? 'EXPO GO · LOCAL FILE PICKER' : 'GRANT AUDIO ACCESS · LOCAL ONLY'}
+            </NexusText>
           </View>
           <Pressable
             onPress={() => {
