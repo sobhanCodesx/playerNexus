@@ -10,7 +10,10 @@ import {
 } from 'react';
 import { AppState, Platform } from 'react-native';
 import {
+  clearPreloadedSource,
+  createAudioPlayer,
   getRecordingPermissionsAsync,
+  preload,
   requestNotificationPermissionsAsync,
   requestRecordingPermissionsAsync,
   setAudioModeAsync,
@@ -66,6 +69,7 @@ type PlayerContextValue = {
   audioBands: AudioBands;
   waveform: number[];
   audioReactiveEnabled: boolean;
+  isTransitioning: boolean;
   playTrack: (track: Track) => void;
   playQueue: (tracks: Track[], startTrackId?: string) => void;
   togglePlayback: () => void;
@@ -77,6 +81,8 @@ type PlayerContextValue = {
   toggleFavorite: () => void;
   toggleShuffle: () => void;
   toggleRepeat: () => void;
+  playNext: (track: Track) => void;
+  addToQueue: (track: Track) => void;
   moveQueueItem: (from: number, to: number) => void;
   scanLibrary: (requestPermission?: boolean) => Promise<void>;
   enableAudioReactive: () => Promise<boolean>;
@@ -93,6 +99,14 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const lastBandUpdate = useRef(0);
   const playIntent = useRef(false);
   const notificationAsked = useRef(false);
+  const transitionPlayer = useRef<ReturnType<typeof createAudioPlayer> | null>(null);
+  const transitionTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const transitioningRef = useRef(false);
+  const handoffRef = useRef<{
+    player: ReturnType<typeof createAudioPlayer>;
+    trackId: string;
+  } | null>(null);
+  const preloadedUri = useRef<string | null>(null);
   const pendingRestore = useRef<{ trackId: string; positionSec: number } | null>(null);
   const lastHistoryTrack = useRef<string | null>(null);
   const sessionPromise = useRef<Promise<NexusPlaybackSession> | null>(null);
@@ -134,6 +148,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const [audioBands, setAudioBands] = useState<AudioBands>(silentBands);
   const [waveform, setWaveform] = useState<number[]>([]);
   const [audioReactiveEnabled, setAudioReactiveEnabled] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false);
 
   const track = queue[currentIndex] ?? queue[0] ?? demoTracks[0];
   const isRealTrack = Boolean(track?.uri && track.source === 'device');
@@ -157,6 +172,56 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     () => libraryTracks.filter((item) => favorites.has(item.id)),
     [favorites, libraryTracks],
   );
+
+  const resolveNextIndex = useCallback(
+    (index: number, allowShuffle = true) => {
+      if (!queue.length) return -1;
+      if (allowShuffle && shuffleEnabled && queue.length > 1) {
+        let nextIndex = index;
+        while (nextIndex === index) nextIndex = Math.floor(Math.random() * queue.length);
+        return nextIndex;
+      }
+      if (index < queue.length - 1) return index + 1;
+      return repeatMode === 'all' ? 0 : -1;
+    },
+    [queue.length, repeatMode, shuffleEnabled],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (transitionTimer.current) clearInterval(transitionTimer.current);
+      transitionPlayer.current?.remove();
+      transitionPlayer.current = null;
+      if (preloadedUri.current) {
+        clearPreloadedSource(preloadedUri.current).catch(() => undefined);
+        preloadedUri.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!settings.gapless || !isRealTrack || !queue.length) return;
+    const nextIndex = resolveNextIndex(currentIndex, false);
+    const nextTrack = nextIndex >= 0 ? queue[nextIndex] : null;
+    const nextUri = nextTrack?.uri;
+    if (!nextUri || nextUri === preloadedUri.current) return;
+
+    const previous = preloadedUri.current;
+    preloadedUri.current = nextUri;
+    if (previous) clearPreloadedSource(previous).catch(() => undefined);
+    preload(nextUri, {
+      preferredForwardBufferDuration: Math.max(8, settings.crossfadeSeconds + 6),
+    }).catch(() => {
+      if (preloadedUri.current === nextUri) preloadedUri.current = null;
+    });
+  }, [
+    currentIndex,
+    isRealTrack,
+    queue,
+    resolveNextIndex,
+    settings.crossfadeSeconds,
+    settings.gapless,
+  ]);
 
   useEffect(() => {
     let active = true;
@@ -306,6 +371,52 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   }, [audioPlayer, audioStatus.duration, audioStatus.isLoaded, isRealTrack, track.id]);
 
   useEffect(() => {
+    const handoff = handoffRef.current;
+    if (!handoff || handoff.trackId !== track.id || !audioStatus.isLoaded) return;
+
+    const secondary = handoff.player;
+    const position = Math.max(0, secondary.currentTime);
+    let cancelled = false;
+
+    audioPlayer.volume = 0;
+    audioPlayer.seekTo(position)
+      .then(() => {
+        if (cancelled) return;
+        audioPlayer.play();
+        const startedAt = Date.now();
+        const durationMs = 180;
+        const timer = setInterval(() => {
+          const t = Math.min(1, (Date.now() - startedAt) / durationMs);
+          audioPlayer.volume = Math.sin(t * Math.PI * 0.5);
+          secondary.volume = Math.cos(t * Math.PI * 0.5);
+          if (t >= 1) {
+            clearInterval(timer);
+            secondary.pause();
+            secondary.remove();
+            if (transitionPlayer.current === secondary) transitionPlayer.current = null;
+            handoffRef.current = null;
+            transitioningRef.current = false;
+            setIsTransitioning(false);
+            audioPlayer.volume = 1;
+          }
+        }, 30);
+      })
+      .catch(() => {
+        secondary.pause();
+        secondary.remove();
+        handoffRef.current = null;
+        transitionPlayer.current = null;
+        transitioningRef.current = false;
+        setIsTransitioning(false);
+        audioPlayer.volume = 1;
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [audioPlayer, audioStatus.isLoaded, track.id]);
+
+  useEffect(() => {
     if (!isRealTrack) return;
     audioPlayer.setActiveForLockScreen(true, {
       title: track.title,
@@ -316,7 +427,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   }, [audioPlayer, isRealTrack, track.title, track.artist, track.album, track.artworkUri]);
 
   useEffect(() => {
-    if (!audioStatus.didJustFinish || !isRealTrack) return;
+    if (!audioStatus.didJustFinish || !isRealTrack || transitioningRef.current) return;
 
     if (repeatMode === 'one') {
       playIntent.current = true;
@@ -453,19 +564,120 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     requestNotificationPermissionsAsync().catch(() => undefined);
   }, []);
 
+  const startCrossfade = useCallback(
+    (targetIndex: number, requestedSeconds: number) => {
+      if (
+        transitioningRef.current ||
+        targetIndex < 0 ||
+        targetIndex >= queue.length ||
+        targetIndex === currentIndex
+      ) return false;
+
+      const nextTrack = queue[targetIndex];
+      if (!isRealTrack || !nextTrack?.uri || !audioStatus.playing) return false;
+
+      const seconds = Math.max(0.22, Math.min(8, requestedSeconds));
+      transitioningRef.current = true;
+      setIsTransitioning(true);
+
+      const secondary = createAudioPlayer(nextTrack.uri, { updateInterval: 50 });
+      transitionPlayer.current?.remove();
+      transitionPlayer.current = secondary;
+      secondary.volume = 0;
+      secondary.play();
+
+      const startedAt = Date.now();
+      const durationMs = seconds * 1000;
+      if (transitionTimer.current) clearInterval(transitionTimer.current);
+      transitionTimer.current = setInterval(() => {
+        const t = Math.min(1, (Date.now() - startedAt) / durationMs);
+        audioPlayer.volume = Math.cos(t * Math.PI * 0.5);
+        secondary.volume = Math.sin(t * Math.PI * 0.5);
+
+        if (t >= 1) {
+          if (transitionTimer.current) clearInterval(transitionTimer.current);
+          transitionTimer.current = null;
+          audioPlayer.pause();
+          audioPlayer.volume = 0;
+          handoffRef.current = { player: secondary, trackId: nextTrack.id };
+          playIntent.current = true;
+          setCurrentIndex(targetIndex);
+          setDemoProgress(0);
+        }
+      }, 34);
+
+      return true;
+    },
+    [audioPlayer, audioStatus.playing, currentIndex, isRealTrack, queue],
+  );
+
+  useEffect(() => {
+    if (
+      !isRealTrack ||
+      !audioStatus.playing ||
+      settings.crossfadeSeconds <= 0 ||
+      repeatMode === 'one' ||
+      transitioningRef.current ||
+      audioStatus.duration <= settings.crossfadeSeconds + 0.35
+    ) return;
+
+    const remaining = audioStatus.duration - audioStatus.currentTime;
+    if (remaining > settings.crossfadeSeconds) return;
+
+    const nextIndex = resolveNextIndex(currentIndex, true);
+    if (nextIndex >= 0) startCrossfade(nextIndex, settings.crossfadeSeconds);
+  }, [
+    audioStatus.currentTime,
+    audioStatus.duration,
+    audioStatus.playing,
+    currentIndex,
+    isRealTrack,
+    repeatMode,
+    resolveNextIndex,
+    settings.crossfadeSeconds,
+    startCrossfade,
+  ]);
+
   const playTrack = useCallback((nextTrack: Track) => {
-    const index = queue.findIndex((item) => item.id === nextTrack.id);
-    playIntent.current = true;
-    if (index >= 0) {
-      if (index === currentIndex && nextTrack.uri) {
-        ensureNotificationPermission();
-        audioPlayer.play();
-      } else {
-        setCurrentIndex(index);
+    let index = queue.findIndex((item) => item.id === nextTrack.id);
+    let targetQueue = queue;
+
+    if (index < 0) {
+      targetQueue = libraryTracks;
+      index = targetQueue.findIndex((item) => item.id === nextTrack.id);
+      if (index < 0) {
+        targetQueue = [nextTrack];
+        index = 0;
       }
+      setQueue(targetQueue);
     }
+
+    playIntent.current = true;
+    ensureNotificationPermission();
+
+    if (targetQueue === queue && index === currentIndex && nextTrack.uri) {
+      audioPlayer.play();
+      return;
+    }
+
+    if (
+      targetQueue === queue &&
+      settings.crossfadeSeconds > 0 &&
+      startCrossfade(index, Math.min(0.72, settings.crossfadeSeconds))
+    ) return;
+
+    setCurrentIndex(index);
+    setDemoProgress(0);
     if (!nextTrack.uri) setDemoPlaying(true);
-  }, [audioPlayer, currentIndex, ensureNotificationPermission, queue]);
+  }, [
+    audioPlayer,
+    currentIndex,
+    ensureNotificationPermission,
+    libraryTracks,
+    queue,
+    settings.crossfadeSeconds,
+    startCrossfade,
+  ]);
 
   const playQueue = useCallback((tracks: Track[], startTrackId?: string) => {
     if (!tracks.length) return;
@@ -505,18 +717,24 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   }, [audioPlayer, audioStatus.playing, ensureNotificationPermission, isRealTrack, track]);
 
   const next = useCallback(() => {
+    const nextIndex = resolveNextIndex(currentIndex, true);
+    if (nextIndex < 0) return;
     playIntent.current = isPlaying;
-    setCurrentIndex((index) => {
-      if (shuffleEnabled && queue.length > 1) {
-        let nextIndex = index;
-        while (nextIndex === index) nextIndex = Math.floor(Math.random() * queue.length);
-        return nextIndex;
-      }
-      if (index < queue.length - 1) return index + 1;
-      return repeatMode === 'all' ? 0 : index;
-    });
+
+    if (
+      settings.crossfadeSeconds > 0 &&
+      startCrossfade(nextIndex, Math.min(0.72, settings.crossfadeSeconds))
+    ) return;
+
+    setCurrentIndex(nextIndex);
     setDemoProgress(0);
-  }, [isPlaying, queue.length, repeatMode, shuffleEnabled]);
+  }, [
+    currentIndex,
+    isPlaying,
+    resolveNextIndex,
+    settings.crossfadeSeconds,
+    startCrossfade,
+  ]);
 
   const previous = useCallback(() => {
     if (isRealTrack && audioStatus.currentTime > 4) {
@@ -563,6 +781,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     audioBands,
     waveform,
     audioReactiveEnabled,
+    isTransitioning,
     playTrack,
     playQueue,
     togglePlayback,
@@ -582,6 +801,20 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     toggleShuffle: () => setShuffleEnabled((current) => !current),
     toggleRepeat: () =>
       setRepeatMode((current) => current === 'off' ? 'all' : current === 'all' ? 'one' : 'off'),
+    playNext: (item) => {
+      setQueue((current) => {
+        const without = current.filter((entry) => entry.id !== item.id);
+        const activeId = track.id;
+        const activeIndex = without.findIndex((entry) => entry.id === activeId);
+        const insertAt = Math.max(0, activeIndex + 1);
+        without.splice(insertAt, 0, item);
+        setCurrentIndex(insertAt > 0 ? insertAt - 1 : 0);
+        return without;
+      });
+    },
+    addToQueue: (item) => {
+      setQueue((current) => current.some((entry) => entry.id === item.id) ? current : [...current, item]);
+    },
     moveQueueItem: (from, to) => {
       const activeId = track.id;
       setQueue((current) => {
@@ -596,6 +829,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     },
     scanLibrary,
     enableAudioReactive,
+    isTransitioning,
   }), [
     track,
     queue,
@@ -618,6 +852,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     audioBands,
     waveform,
     audioReactiveEnabled,
+    isTransitioning,
     playTrack,
     playQueue,
     togglePlayback,

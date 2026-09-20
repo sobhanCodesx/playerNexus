@@ -21,6 +21,7 @@ export type NexusSettings = {
   depthMotion: boolean;
   haptics: boolean;
   gapless: boolean;
+  crossfadeSeconds: number;
   visualQuality: NexusVisualQuality;
 };
 
@@ -41,6 +42,7 @@ const defaults: NexusSettings = {
   depthMotion: true,
   haptics: true,
   gapless: true,
+  crossfadeSeconds: 2,
   visualQuality: 'balanced',
 };
 
