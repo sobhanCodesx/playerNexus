@@ -35,6 +35,8 @@ import Animated, {
 import type { AudioBands } from '@/audio/audio-analysis';
 import { silentBands } from '@/audio/audio-analysis';
 import { gradientBackground, nexusTokens, type NexusPalette } from '@/design/nexus-tokens';
+import { getNexusQualityProfile } from '@/design/quality-profile';
+import { useNexusSettings } from '@/providers/settings-provider';
 import { nexusHaptics } from '@/services/haptics';
 
 export function NexusText({
@@ -43,13 +45,15 @@ export function NexusText({
   style,
   ...props
 }: TextProps & { variant?: keyof typeof nexusTokens.type; muted?: boolean }) {
+  const { settings } = useNexusSettings();
+  const light = settings.themeMode === 'light';
   return (
     <Text
       {...props}
       allowFontScaling
       maxFontSizeMultiplier={1.35}
       style={[
-        { color: muted ? nexusTokens.colors.muted : nexusTokens.colors.white },
+        { color: muted ? (light ? '#6D7378' : nexusTokens.colors.muted) : (light ? '#15191D' : nexusTokens.colors.white) },
         nexusTokens.type[variant] as TextStyle,
         style,
       ]}
@@ -62,12 +66,32 @@ export function NexusSurface({
   style,
   intensity = 'medium',
 }: PropsWithChildren<{ style?: StyleProp<ViewStyle>; intensity?: 'soft' | 'medium' | 'strong' }>) {
+  const { settings } = useNexusSettings();
+  const light = settings.themeMode === 'light';
+  const quality = getNexusQualityProfile(settings.visualQuality);
   const alpha = intensity === 'soft' ? 0.045 : intensity === 'strong' ? 0.11 : 0.075;
-  const blur = intensity === 'soft' ? 10 : intensity === 'strong' ? 24 : 16;
+  const baseBlur = intensity === 'soft' ? 10 : intensity === 'strong' ? 24 : 16;
+  const blur = Math.round(baseBlur * (quality.visualizerBlurScale < 0.7 ? 0.72 : 1));
   return (
-    <View style={[styles.surface, { backgroundColor: 'rgba(12,16,20,' + (0.48 + alpha) + ')' }, style]}>
-      <BlurView pointerEvents="none" intensity={blur} tint="dark" style={StyleSheet.absoluteFill} />
-      <View pointerEvents="none" style={styles.surfaceHighlight} />
+    <View
+      style={[
+        styles.surface,
+        {
+          backgroundColor: light
+            ? 'rgba(255,255,255,' + (0.5 + alpha) + ')'
+            : 'rgba(12,16,20,' + (0.48 + alpha) + ')',
+          borderColor: light ? 'rgba(20,24,28,0.08)' : 'rgba(255,255,255,0.11)',
+        },
+        style,
+      ]}>
+      <BlurView pointerEvents="none" intensity={blur} tint={light ? 'light' : 'dark'} style={StyleSheet.absoluteFill} />
+      <View
+        pointerEvents="none"
+        style={[
+          styles.surfaceHighlight,
+          { backgroundColor: light ? 'rgba(255,255,255,0.78)' : 'rgba(255,255,255,0.34)' },
+        ]}
+      />
       {children}
     </View>
   );
@@ -77,17 +101,19 @@ export function NexusIcon({
   ios,
   android,
   size = 22,
-  color = nexusTokens.colors.white,
+  color,
 }: {
   ios: string;
   android: string;
   size?: number;
   color?: string;
 }) {
+  const { settings } = useNexusSettings();
+  const resolvedColor = color ?? (settings.themeMode === 'light' ? '#171B1F' : nexusTokens.colors.white);
   return (
     <SymbolView
       name={{ ios, android, web: android } as any}
-      tintColor={color}
+      tintColor={resolvedColor}
       size={size}
       style={{ width: size, height: size }}
     />
@@ -161,12 +187,17 @@ export function NexusArtwork({
   active?: boolean;
   style?: StyleProp<ViewStyle>;
 }>) {
+  const { settings } = useNexusSettings();
   const pulse = useSharedValue(0);
   useEffect(() => {
+    if (settings.reduceMotion) {
+      pulse.value = withTiming(0, { duration: 180 });
+      return;
+    }
     pulse.value = active
       ? withRepeat(withSequence(withTiming(1, { duration: 1800 }), withTiming(0, { duration: 2200 })), -1, false)
       : withTiming(0, { duration: 500 });
-  }, [active, pulse]);
+  }, [active, pulse, settings.reduceMotion]);
 
   const animated = useAnimatedStyle(() => ({
     transform: [
@@ -224,10 +255,16 @@ export function NexusAura({
   size?: number;
   style?: StyleProp<ViewStyle>;
 }) {
+  const { settings } = useNexusSettings();
+  const quality = getNexusQualityProfile(settings.visualQuality);
   const phase = useSharedValue(0);
   const bass = useSharedValue(bands.bass);
   const mid = useSharedValue(bands.mid);
   useEffect(() => {
+    if (settings.reduceMotion) {
+      phase.value = withTiming(0.5, { duration: 180 });
+      return;
+    }
     phase.value = withRepeat(
       withTiming(1, {
         duration: active ? nexusTokens.motion.ambientFast : nexusTokens.motion.ambientSlow,
@@ -236,7 +273,7 @@ export function NexusAura({
       -1,
       true,
     );
-  }, [active, phase]);
+  }, [active, phase, settings.reduceMotion]);
   useEffect(() => {
     bass.value = withTiming(bands.bass, { duration: 90 });
     mid.value = withTiming(bands.mid, { duration: 130 });
@@ -244,18 +281,18 @@ export function NexusAura({
 
   const a = useAnimatedStyle(() => ({
     opacity: active
-      ? interpolate(phase.value, [0, 1], [0.28, 0.42]) + bass.value * 0.14
-      : 0.17,
+      ? (interpolate(phase.value, [0, 1], [0.28, 0.42]) + bass.value * 0.14) * quality.auraEnergy
+      : 0.17 * quality.auraEnergy,
     transform: [
       { translateX: interpolate(phase.value, [0, 1], [-22, 18]) },
       { translateY: interpolate(phase.value, [0, 1], [16, -18]) },
-      { scale: interpolate(phase.value, [0, 1], [0.9, 1.06]) + bass.value * 0.09 },
+      { scale: interpolate(phase.value, [0, 1], [0.9, 1.06]) + bass.value * 0.09 * quality.auraEnergy },
     ],
   }));
   const b = useAnimatedStyle(() => ({
     opacity: active
-      ? interpolate(phase.value, [0, 1], [0.16, 0.26]) + mid.value * 0.12
-      : 0.09,
+      ? (interpolate(phase.value, [0, 1], [0.16, 0.26]) + mid.value * 0.12) * quality.auraEnergy
+      : 0.09 * quality.auraEnergy,
     transform: [
       { translateX: interpolate(phase.value, [0, 1], [26, -20]) },
       { scale: interpolate(phase.value, [0, 1], [1.06, 0.91]) + mid.value * 0.06 },
@@ -271,7 +308,7 @@ export function NexusAura({
           { width: size * 0.76, height: size * 0.76, borderRadius: size, backgroundColor: palette[0] },
         ]}
       />
-      <Animated.View
+      {quality.auraLayers >= 2 ? <Animated.View
         style={[
           styles.aura,
           b,
@@ -284,8 +321,8 @@ export function NexusAura({
             bottom: 0,
           },
         ]}
-      />
-      <View
+      /> : null}
+      {quality.auraLayers >= 3 ? <View
         style={[
           styles.aura,
           {
@@ -298,7 +335,7 @@ export function NexusAura({
             opacity: 0.16 + bands.high * 0.12,
           },
         ]}
-      />
+      /> : null}
     </View>
   );
 }
@@ -350,8 +387,14 @@ export function NexusOrb({
   bands?: AudioBands;
   size?: number;
 }) {
+  const { settings } = useNexusSettings();
+  const quality = getNexusQualityProfile(settings.visualQuality);
   const idle = useSharedValue(0);
   useEffect(() => {
+    if (settings.reduceMotion) {
+      idle.value = withTiming(0.5, { duration: 180 });
+      return;
+    }
     idle.value = withRepeat(
       withSequence(
         withTiming(1, { duration: active ? 1700 : 3000, easing: Easing.inOut(Easing.sin) }),
@@ -360,7 +403,7 @@ export function NexusOrb({
       -1,
       false,
     );
-  }, [active, idle]);
+  }, [active, idle, settings.reduceMotion]);
 
   const path = useMemo(() => organicPath(size, bands), [size, bands]);
   const animated = useAnimatedStyle(() => ({
@@ -374,7 +417,7 @@ export function NexusOrb({
     <Animated.View style={[{ width: size, height: size }, animated]}>
       <Canvas style={StyleSheet.absoluteFill}>
         <Path path={path} color={palette[0] + '52'}>
-          <BlurMask blur={8 + bands.bass * 8} style="normal" />
+          <BlurMask blur={(8 + bands.bass * 8) * quality.orbBlurScale} style="normal" />
         </Path>
         <Path path={path}>
           <RadialGradient
@@ -401,11 +444,13 @@ export function NexusOrb({
             colors={['rgba(255,255,255,0.58)', 'rgba(255,255,255,0)']}
           />
         </Circle>
-        {bands.high > 0.08 ? (
+        {quality.orbParticles > 0 && bands.high > 0.08 ? (
           <>
             <Circle c={vec(size * 0.72, size * 0.33)} r={1.1 + bands.high * 1.8} color={palette[0] + 'C0'} />
             <Circle c={vec(size * 0.27, size * 0.69)} r={0.8 + bands.high * 1.4} color={palette[1] + 'A8'} />
-            <Circle c={vec(size * 0.68, size * 0.73)} r={0.7 + bands.transient * 2.0} color="rgba(255,255,255,0.48)" />
+            {quality.orbParticles >= 3 ? (
+              <Circle c={vec(size * 0.68, size * 0.73)} r={0.7 + bands.transient * 2.0} color="rgba(255,255,255,0.48)" />
+            ) : null}
           </>
         ) : null}
       </Canvas>

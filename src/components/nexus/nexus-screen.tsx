@@ -3,6 +3,7 @@ import { ScrollView, ScrollViewProps, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { usePlayer } from '@/providers/player-provider';
+import { useNexusSettings } from '@/providers/settings-provider';
 import { gradientBackground, nexusTokens } from '@/design/nexus-tokens';
 import { NexusAura } from './nexus-primitives';
 
@@ -14,6 +15,19 @@ export function NexusScreen({
 }: PropsWithChildren<ScrollViewProps & { scroll?: boolean }>) {
   const insets = useSafeAreaInsets();
   const { track, theme, isPlaying, audioBands } = usePlayer();
+  const { settings } = useNexusSettings();
+
+  const background =
+    settings.themeMode === 'amoled'
+      ? { backgroundColor: '#000000' }
+      : settings.themeMode === 'obsidian'
+        ? gradientBackground(['#11151A', '#080A0D', '#050608'], 170)
+        : settings.themeMode === 'light'
+          ? gradientBackground(['#F2EFE9', '#E6E2DB', '#D8D4CC'], 170)
+          : gradientBackground([theme.backgroundTint, '#080A0D', nexusTokens.colors.obsidian], 170);
+
+  const showAura = settings.themeMode === 'dynamic' || settings.themeMode === 'light';
+
   const content = (
     <View
       style={[
@@ -26,18 +40,16 @@ export function NexusScreen({
   );
 
   return (
-    <View
-      style={[
-        styles.root,
-        gradientBackground([theme.backgroundTint, '#080A0D', nexusTokens.colors.obsidian], 170),
-      ]}>
-      <NexusAura
-        palette={track.palette}
-        active={isPlaying}
-        bands={audioBands}
-        size={520}
-        style={styles.aura}
-      />
+    <View style={[styles.root, background]}>
+      {showAura ? (
+        <NexusAura
+          palette={track.palette}
+          active={isPlaying}
+          bands={audioBands}
+          size={520}
+          style={[styles.aura, settings.themeMode === 'light' && styles.lightAura]}
+        />
+      ) : null}
       {scroll ? (
         <ScrollView
           {...props}
@@ -62,6 +74,7 @@ const styles = StyleSheet.create({
     right: -230,
     opacity: 0.42,
   },
+  lightAura: { opacity: 0.16 },
   scroll: { flexGrow: 1 },
   content: {
     flexGrow: 1,

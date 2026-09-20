@@ -19,19 +19,21 @@ import Animated, {
 
 import type { AudioBands } from '@/audio/audio-analysis';
 import type { NexusPalette } from '@/design/nexus-tokens';
+import { getNexusQualityProfile } from '@/design/quality-profile';
+import { useNexusSettings } from '@/providers/settings-provider';
 
 type Point = { x: number; y: number };
 
 function contourPath(size: number, bands: AudioBands, layer: number) {
   const count = 22;
   const center = size / 2;
-  const base = size * (0.22 + layer * 0.075);
+  const base = size * (0.22 + layer * 0.062);
   const points: Point[] = Array.from({ length: count }, (_, index) => {
     const angle = (Math.PI * 2 * index) / count - Math.PI / 2;
-    const bass = bands.bass * (0.07 - layer * 0.008);
+    const bass = bands.bass * (0.07 - layer * 0.006);
     const mid = Math.sin(index * 1.45 + layer * 0.9) * bands.mid * 0.05;
     const high = Math.sin(index * 3.8 - layer * 0.7) * bands.high * 0.018;
-    const transient = (index % 5 === layer % 5 ? bands.transient * 0.028 : 0);
+    const transient = index % 5 === layer % 5 ? bands.transient * 0.028 : 0;
     const radius = base * (1 + bass + mid + high + transient);
     return {
       x: center + Math.cos(angle) * radius,
@@ -62,15 +64,23 @@ export function NexusVisualizerField({
   active: boolean;
   size: number;
 }) {
+  const { settings } = useNexusSettings();
+  const quality = getNexusQualityProfile(settings.visualQuality);
   const drift = useSharedValue(0);
+
   useEffect(() => {
+    if (settings.reduceMotion) {
+      drift.value = withTiming(0.5, { duration: 180 });
+      return;
+    }
     drift.value = withRepeat(withTiming(1, { duration: active ? 9000 : 14000 }), -1, true);
-  }, [active, drift]);
+  }, [active, drift, settings.reduceMotion]);
 
   const paths = useMemo(
-    () => [0, 1, 2, 3].map((layer) => contourPath(size, bands, layer)),
-    [size, bands],
+    () => Array.from({ length: quality.visualizerLayers }, (_, layer) => contourPath(size, bands, layer)),
+    [bands, quality.visualizerLayers, size],
   );
+
   const motion = useAnimatedStyle(() => ({
     transform: [
       { rotate: interpolate(drift.value, [0, 1], [-2.2, 2.8]) + 'deg' },
@@ -79,6 +89,15 @@ export function NexusVisualizerField({
   }));
 
   const particleAlpha = 0.18 + bands.high * 0.55;
+  const particles = [
+    { x: 0.27, y: 0.34, r: 1.1 + bands.high * 2.3, color: 'rgba(255,255,255,' + particleAlpha + ')' },
+    { x: 0.72, y: 0.29, r: 0.8 + bands.transient * 2.8, color: palette[0] + 'C0' },
+    { x: 0.78, y: 0.66, r: 0.9 + bands.high * 1.9, color: palette[1] + 'A8' },
+    { x: 0.34, y: 0.76, r: 0.7 + bands.mid * 1.5, color: palette[2] + '98' },
+    { x: 0.18, y: 0.58, r: 0.7 + bands.high * 1.3, color: palette[0] + '80' },
+    { x: 0.58, y: 0.18, r: 0.65 + bands.transient * 1.8, color: 'rgba(255,255,255,0.32)' },
+    { x: 0.63, y: 0.81, r: 0.7 + bands.mid * 1.1, color: palette[1] + '72' },
+  ].slice(0, quality.visualizerParticles);
 
   return (
     <Animated.View style={[{ width: size, height: size }, motion]}>
@@ -89,7 +108,7 @@ export function NexusVisualizerField({
             r={size * 0.42}
             colors={[palette[0] + '82', palette[1] + '48', palette[2] + '20', 'rgba(4,7,10,0)']}
           />
-          <BlurMask blur={22 + bands.bass * 18} style="normal" />
+          <BlurMask blur={(22 + bands.bass * 18) * quality.visualizerBlurScale} style="normal" />
         </Circle>
 
         <Group>
@@ -113,14 +132,19 @@ export function NexusVisualizerField({
         </Group>
 
         <Path path={paths[0]} color={palette[0] + '24'}>
-          <BlurMask blur={8 + bands.mid * 9} style="outer" />
+          <BlurMask blur={(8 + bands.mid * 9) * quality.visualizerBlurScale} style="outer" />
         </Path>
 
-        <Circle c={vec(size * 0.27, size * 0.34)} r={1.1 + bands.high * 2.3} color={'rgba(255,255,255,' + particleAlpha + ')'} />
-        <Circle c={vec(size * 0.72, size * 0.29)} r={0.8 + bands.transient * 2.8} color={palette[0] + 'C0'} />
-        <Circle c={vec(size * 0.78, size * 0.66)} r={0.9 + bands.high * 1.9} color={palette[1] + 'A8'} />
-        <Circle c={vec(size * 0.34, size * 0.76)} r={0.7 + bands.mid * 1.5} color={palette[2] + '98'} />
+        {particles.map((particle, index) => (
+          <Circle
+            key={index}
+            c={vec(size * particle.x, size * particle.y)}
+            r={particle.r}
+            color={particle.color}
+          />
+        ))}
       </Canvas>
+
       <View pointerEvents="none" style={styles.core}>
         <View style={[styles.coreLight, { backgroundColor: palette[0], opacity: 0.2 + bands.rms * 0.25 }]} />
       </View>

@@ -23,6 +23,8 @@ import { createNexusAudioAnalyzer, silentBands, type AudioBands } from '@/audio/
 import { deriveAlbums, deriveArtists } from '@/data/derive-library';
 import { tracks as demoTracks, type Album, type Artist, type Track } from '@/data/library';
 import { deriveNexusTheme } from '@/design/nexus-tokens';
+import { getNexusQualityProfile } from '@/design/quality-profile';
+import { useNexusSettings } from '@/providers/settings-provider';
 import {
   getMusicPermission,
   requestMusicPermission,
@@ -66,7 +68,9 @@ type PlayerContextValue = {
 const PlayerContext = createContext<PlayerContextValue | null>(null);
 
 export function PlayerProvider({ children }: PropsWithChildren) {
-  const audioPlayer = useAudioPlayer(null, { updateInterval: 100 });
+  const { settings } = useNexusSettings();
+  const quality = getNexusQualityProfile(settings.visualQuality);
+  const audioPlayer = useAudioPlayer(null, { updateInterval: settings.visualQuality === 'ultra' ? 70 : 100 });
   const audioStatus = useAudioPlayerStatus(audioPlayer);
   const analyzer = useRef(createNexusAudioAnalyzer());
   const lastBandUpdate = useRef(0);
@@ -166,7 +170,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   useAudioSampleListener(audioPlayer, (sample) => {
     if (!audioReactiveEnabled || !audioStatus.playing) return;
     const now = Date.now();
-    if (now - lastBandUpdate.current < 32) return;
+    if (now - lastBandUpdate.current < quality.sampleIntervalMs) return;
     lastBandUpdate.current = now;
     setAudioBands(analyzer.current(sample));
   });
