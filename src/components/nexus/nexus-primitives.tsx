@@ -9,6 +9,7 @@ import {
   TextProps,
   TextStyle,
   View,
+  ViewProps,
   ViewStyle,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
@@ -72,7 +73,10 @@ export function NexusSurface({
   children,
   style,
   intensity = 'medium',
-}: PropsWithChildren<{ style?: StyleProp<ViewStyle>; intensity?: 'soft' | 'medium' | 'strong' }>) {
+  ...viewProps
+}: PropsWithChildren<
+  ViewProps & { style?: StyleProp<ViewStyle>; intensity?: 'soft' | 'medium' | 'strong' }
+>) {
   const { settings, effectiveVisualQuality, highTextContrastEnabled } = useNexusSettings();
   const light = settings.themeMode === 'light';
   const quality = getNexusQualityProfile(effectiveVisualQuality);
@@ -83,6 +87,7 @@ export function NexusSurface({
     : Math.round(baseBlur * (quality.visualizerBlurScale < 0.7 ? 0.72 : 1));
   return (
     <View
+      {...viewProps}
       style={[
         styles.surface,
         {
