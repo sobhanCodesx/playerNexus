@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import {
   getRecordingPermissionsAsync,
   requestNotificationPermissionsAsync,
@@ -33,6 +33,12 @@ import {
   scanDeviceMusic,
   type LibraryPermission,
 } from '@/services/library-service';
+import {
+  loadNexusPlaybackSession,
+  reconcileTrackOrder,
+  saveNexusPlaybackSession,
+  type NexusPlaybackSession,
+} from '@/services/session-store';
 
 export type LibraryStatus = 'checking' | 'permission' | 'scanning' | 'ready' | 'empty' | 'error';
 
@@ -42,6 +48,9 @@ type PlayerContextValue = {
   libraryTracks: Track[];
   libraryAlbums: Album[];
   libraryArtists: Artist[];
+  recentTracks: Track[];
+  favoriteTracks: Track[];
+  playCounts: Record<string, number>;
   libraryStatus: LibraryStatus;
   libraryPermission: LibraryPermission;
   isPlaying: boolean;
@@ -78,6 +87,25 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const lastBandUpdate = useRef(0);
   const playIntent = useRef(false);
   const notificationAsked = useRef(false);
+  const pendingRestore = useRef<{ trackId: string; positionSec: number } | null>(null);
+  const lastHistoryTrack = useRef<string | null>(null);
+  const sessionPromise = useRef<Promise<NexusPlaybackSession> | null>(null);
+  if (!sessionPromise.current) sessionPromise.current = loadNexusPlaybackSession();
+  const sessionSnapshot = useRef<{
+    currentTrackId: string | null;
+    positionSec: number;
+    queueIds: string[];
+    favoriteIds: string[];
+    recentIds: string[];
+    playCounts: Record<string, number>;
+  }>({
+    currentTrackId: null,
+    positionSec: 0,
+    queueIds: [],
+    favoriteIds: [],
+    recentIds: [],
+    playCounts: {},
+  });
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [queue, setQueue] = useState<Track[]>(demoTracks);
@@ -86,6 +114,9 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const [demoProgress, setDemoProgress] = useState(0.36);
   const [expanded, setExpanded] = useState(false);
   const [favorites, setFavorites] = useState(() => new Set(demoTracks.filter((t) => t.favorite).map((t) => t.id)));
+  const [recentIds, setRecentIds] = useState<string[]>([]);
+  const [playCounts, setPlayCounts] = useState<Record<string, number>>({});
+  const [sessionHydrated, setSessionHydrated] = useState(false);
   const [libraryStatus, setLibraryStatus] = useState<LibraryStatus>('checking');
   const [libraryPermission, setLibraryPermission] = useState<LibraryPermission>('undetermined');
   const [audioBands, setAudioBands] = useState<AudioBands>(silentBands);
@@ -106,6 +137,40 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const libraryTracks = deviceTracks.length ? deviceTracks : queue;
   const libraryAlbums = useMemo(() => deriveAlbums(libraryTracks), [libraryTracks]);
   const libraryArtists = useMemo(() => deriveArtists(libraryTracks), [libraryTracks]);
+  const recentTracks = useMemo(() => {
+    const byId = new Map(libraryTracks.map((item) => [item.id, item] as const));
+    return recentIds.map((id) => byId.get(id)).filter((item): item is Track => Boolean(item));
+  }, [libraryTracks, recentIds]);
+  const favoriteTracks = useMemo(
+    () => libraryTracks.filter((item) => favorites.has(item.id)),
+    [favorites, libraryTracks],
+  );
+
+  useEffect(() => {
+    let active = true;
+    sessionPromise.current?.then((saved) => {
+      if (!active) return;
+      if (saved.favoriteIds.length) setFavorites(new Set(saved.favoriteIds));
+      setRecentIds(saved.recentIds);
+      setPlayCounts(saved.playCounts);
+
+      const orderedDemo = reconcileTrackOrder(demoTracks, saved.queueIds);
+      if (orderedDemo.length) {
+        setQueue((current) => current.some((item) => item.source === 'device') ? current : orderedDemo);
+        const savedIndex = orderedDemo.findIndex((item) => item.id === saved.currentTrackId);
+        if (savedIndex >= 0) {
+          setCurrentIndex(savedIndex);
+          const label = orderedDemo[savedIndex].duration.split(':');
+          const seconds = (Number(label[0]) || 0) * 60 + (Number(label[1]) || 0);
+          if (seconds > 0) setDemoProgress(Math.min(1, saved.positionSec / seconds));
+        }
+      }
+      setSessionHydrated(true);
+    }).catch(() => setSessionHydrated(true));
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     setAudioModeAsync({
@@ -132,10 +197,22 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       const scanned = await scanDeviceMusic();
       setDeviceTracks(scanned);
       if (scanned.length) {
-        setQueue(scanned);
-        setCurrentIndex(0);
+        const saved = await sessionPromise.current;
+        const restoredQueue = reconcileTrackOrder(scanned, saved?.queueIds ?? []);
+        const restoredIndex = Math.max(
+          0,
+          restoredQueue.findIndex((item) => item.id === saved?.currentTrackId),
+        );
+        setQueue(restoredQueue);
+        setCurrentIndex(restoredIndex);
         setDemoPlaying(false);
         playIntent.current = false;
+        if (saved?.currentTrackId && saved.positionSec > 0) {
+          pendingRestore.current = {
+            trackId: saved.currentTrackId,
+            positionSec: saved.positionSec,
+          };
+        }
         setLibraryStatus('ready');
       } else {
         setLibraryStatus('empty');
@@ -208,6 +285,13 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   }, [audioPlayer, isRealTrack, track.id, track.uri]);
 
   useEffect(() => {
+    const restore = pendingRestore.current;
+    if (!isRealTrack || !audioStatus.isLoaded || !restore || restore.trackId !== track.id) return;
+    pendingRestore.current = null;
+    audioPlayer.seekTo(Math.min(restore.positionSec, Math.max(0, audioStatus.duration - 0.25))).catch(() => undefined);
+  }, [audioPlayer, audioStatus.duration, audioStatus.isLoaded, isRealTrack, track.id]);
+
+  useEffect(() => {
     if (!isRealTrack) return;
     audioPlayer.setActiveForLockScreen(true, {
       title: track.title,
@@ -267,6 +351,42 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       cancelled = true;
     };
   }, [track.id, track.albumId, track.artworkUri, track.source]);
+
+  useEffect(() => {
+    if (!isPlaying || lastHistoryTrack.current === track.id) return;
+    lastHistoryTrack.current = track.id;
+    setRecentIds((current) => [track.id, ...current.filter((id) => id !== track.id)].slice(0, 40));
+    setPlayCounts((current) => ({
+      ...current,
+      [track.id]: (current[track.id] ?? 0) + 1,
+    }));
+  }, [isPlaying, track.id]);
+
+  useEffect(() => {
+    if (!sessionHydrated) return;
+    sessionSnapshot.current = {
+      currentTrackId: track.id,
+      positionSec: currentTime,
+      queueIds: queue.map((item) => item.id),
+      favoriteIds: [...favorites],
+      recentIds,
+      playCounts,
+    };
+  }, [currentTime, favorites, playCounts, queue, recentIds, sessionHydrated, track.id]);
+
+  useEffect(() => {
+    if (!sessionHydrated) return;
+    const persist = () => saveNexusPlaybackSession(sessionSnapshot.current).catch(() => undefined);
+    const interval = setInterval(persist, 5000);
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') persist();
+    });
+    return () => {
+      clearInterval(interval);
+      subscription.remove();
+      persist();
+    };
+  }, [sessionHydrated]);
 
   const ensureNotificationPermission = useCallback(() => {
     if (Platform.OS !== 'android' || notificationAsked.current) return;
@@ -343,6 +463,9 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     libraryTracks,
     libraryAlbums,
     libraryArtists,
+    recentTracks,
+    favoriteTracks,
+    playCounts,
     libraryStatus,
     libraryPermission,
     isPlaying,
@@ -390,6 +513,9 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     libraryTracks,
     libraryAlbums,
     libraryArtists,
+    recentTracks,
+    favoriteTracks,
+    playCounts,
     libraryStatus,
     libraryPermission,
     isPlaying,
