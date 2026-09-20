@@ -1,8 +1,10 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Alert,
+  AppState,
   Linking,
   TextInput,
   View,
@@ -19,6 +21,10 @@ import { NexusIcon, NexusSurface, NexusText } from '@/components/nexus/nexus-pri
 import { NexusScreen } from '@/components/nexus/nexus-screen';
 import { usePlayer, usePlayerActions } from '@/providers/player-provider';
 import { useNexusCollections } from '@/providers/collections-provider';
+import {
+  getMusicAccessDiagnostics,
+  type MusicAccessDiagnosticSnapshot,
+} from '@/services/library-service';
 
 const tabs = ['Songs', 'Albums', 'Artists', 'Playlists', 'Folders'] as const;
 const sortModes = ['Recently added', 'Title', 'Artist', 'Album', 'Most played'] as const;
@@ -39,6 +45,8 @@ export default function LibraryScreen() {
   const [sort, setSort] = useState<SortMode>('Recently added');
   const [creating, setCreating] = useState(false);
   const [playlistName, setPlaylistName] = useState('');
+  const [musicDiagnostics, setMusicDiagnostics] = useState<MusicAccessDiagnosticSnapshot | null>(null);
+  const [requestingMusicAccess, setRequestingMusicAccess] = useState(false);
   const albumWidth = Math.min(164, (width - 56) / 2);
   const artistSize = Math.min(92, Math.max(72, (width - 92) / 3));
 
@@ -89,6 +97,66 @@ export default function LibraryScreen() {
     });
     return map;
   }, [tracks]);
+
+  const refreshMusicDiagnostics = useCallback(() => {
+    getMusicAccessDiagnostics()
+      .then(setMusicDiagnostics)
+      .catch(() => setMusicDiagnostics(null));
+  }, []);
+
+  useEffect(() => {
+    if (player.libraryPermission !== 'granted') refreshMusicDiagnostics();
+  }, [player.libraryPermission, refreshMusicDiagnostics]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        refreshMusicDiagnostics();
+        if (player.libraryPermission !== 'granted') player.scanLibrary(false);
+      }
+    });
+    return () => subscription.remove();
+  }, [player.libraryPermission, player.scanLibrary, refreshMusicDiagnostics]);
+
+  const handleMusicAccess = useCallback(async () => {
+    if (requestingMusicAccess) return;
+    setRequestingMusicAccess(true);
+    try {
+      const permission = await player.scanLibrary(true);
+      const diagnostics = await getMusicAccessDiagnostics().catch(() => null);
+      setMusicDiagnostics(diagnostics);
+
+      if (permission === 'granted') return;
+
+      const buildProblem =
+        diagnostics?.nativeScanner === false || diagnostics?.declared === false;
+      const detail = diagnostics
+        ? [
+            'Android SDK ' + diagnostics.sdkInt,
+            diagnostics.permission.split('.').pop(),
+            'declared: ' + (diagnostics.declared === null ? 'unknown' : diagnostics.declared ? 'yes' : 'NO'),
+            'granted: ' + (diagnostics.granted ? 'yes' : 'no'),
+            'native scanner: ' + (diagnostics.nativeScanner ? 'yes' : 'NO'),
+          ].join(' · ')
+        : 'Permission request returned ' + permission + '.';
+
+      Alert.alert(
+        buildProblem ? 'Development build needs rebuilding' : 'Music access is still off',
+        buildProblem
+          ? 'The installed Android app does not contain the current native music permission/scanner. Rebuild and reinstall the development client.\n\n' + detail
+          : 'Android did not grant Music and audio access. Open the app settings and enable Music and audio.\n\n' + detail,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Open Settings',
+            onPress: () => Linking.openSettings().catch(() => undefined),
+          },
+        ],
+      );
+    } finally {
+      setRequestingMusicAccess(false);
+    }
+  }, [player.scanLibrary, requestingMusicAccess]);
 
   const createPlaylist = () => {
     const trimmed = playlistName.trim();
@@ -208,15 +276,28 @@ export default function LibraryScreen() {
         <NexusSurface style={styles.permission} intensity="strong">
           <View style={{ flex: 1, gap: 3 }}>
             <NexusText variant="caption">
-              {player.libraryPermission === 'blocked'
-                ? 'Music access is blocked'
-                : 'Scan the Android music library'}
+              {musicDiagnostics?.nativeScanner === false
+                ? 'Native music scanner is missing'
+                : musicDiagnostics?.declared === false
+                  ? 'Audio permission is missing from this build'
+                  : player.libraryPermission === 'blocked'
+                    ? 'Music access is blocked'
+                    : 'Scan the Android music library'}
             </NexusText>
             <NexusText variant="micro" muted>
-              {player.libraryPermission === 'blocked'
-                ? 'OPEN SETTINGS · PERMISSIONS · MUSIC AND AUDIO'
+              {musicDiagnostics
+                ? [
+                    'SDK ' + musicDiagnostics.sdkInt,
+                    musicDiagnostics.permission.split('.').pop(),
+                    musicDiagnostics.declared === null
+                      ? 'MANIFEST ?'
+                      : musicDiagnostics.declared
+                        ? 'MANIFEST YES'
+                        : 'MANIFEST NO',
+                    musicDiagnostics.nativeScanner ? 'NATIVE YES' : 'NATIVE NO',
+                  ].join(' · ')
                 : player.libraryStatus === 'error'
-                  ? 'SCAN FAILED · TRY AGAIN'
+                  ? 'SCAN FAILED · TAP TO DIAGNOSE'
                   : 'FILES STAY ON THIS DEVICE'}
             </NexusText>
           </View>
@@ -225,16 +306,19 @@ export default function LibraryScreen() {
             accessibilityLabel={
               player.libraryPermission === 'blocked' ? 'Open app settings' : 'Allow music access'
             }
-            onPress={() => {
-              if (player.libraryPermission === 'blocked') {
-                Linking.openSettings().catch(() => undefined);
-              } else {
-                player.scanLibrary(true);
-              }
-            }}
-            style={styles.permissionAction}>
+            disabled={requestingMusicAccess}
+            onPress={
+              player.libraryPermission === 'blocked'
+                ? () => Linking.openSettings().catch(() => undefined)
+                : handleMusicAccess
+            }
+            style={[styles.permissionAction, requestingMusicAccess && { opacity: 0.55 }]}>
             <NexusText variant="micro" style={{ color: '#111519' }}>
-              {player.libraryPermission === 'blocked' ? 'SETTINGS' : 'ALLOW'}
+              {requestingMusicAccess
+                ? 'CHECKING'
+                : player.libraryPermission === 'blocked'
+                  ? 'SETTINGS'
+                  : 'ALLOW'}
             </NexusText>
           </Pressable>
         </NexusSurface>

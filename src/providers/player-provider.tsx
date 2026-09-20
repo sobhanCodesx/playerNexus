@@ -93,7 +93,7 @@ type PlayerContextValue = {
   removeFromQueue: (trackId: string) => void;
   clearUpcoming: () => void;
   moveQueueItem: (from: number, to: number) => void;
-  scanLibrary: (requestPermission?: boolean) => Promise<void>;
+  scanLibrary: (requestPermission?: boolean) => Promise<LibraryPermission>;
   enableAudioReactive: () => Promise<boolean>;
   hydrateArtworkWindow: (tracks: Track[]) => void;
 };
@@ -282,7 +282,9 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     }).catch(() => undefined);
   }, []);
 
-  const scanLibrary = useCallback(async (shouldRequestPermission = true) => {
+  const scanLibrary = useCallback(async (
+    shouldRequestPermission = true,
+  ): Promise<LibraryPermission> => {
     try {
       setLibraryStatus('checking');
       let permission = await getMusicPermission();
@@ -292,7 +294,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       setLibraryPermission(permission);
       if (permission !== 'granted') {
         setLibraryStatus('permission');
-        return;
+        return permission;
       }
 
       setLibraryStatus('scanning');
@@ -319,8 +321,12 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       } else {
         setLibraryStatus('empty');
       }
+      return permission;
     } catch {
       setLibraryStatus('error');
+      const permission = await getMusicPermission().catch(() => 'undetermined' as LibraryPermission);
+      setLibraryPermission(permission);
+      return permission;
     }
   }, []);
 
