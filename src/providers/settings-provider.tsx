@@ -99,10 +99,14 @@ export function NexusSettingsProvider({ children }: PropsWithChildren) {
       'screenReaderChanged',
       setScreenReaderEnabled,
     );
-    const highContrast = Platform.OS === 'android'
+    const accessibilityService = Platform.OS === 'android'
       ? AccessibilityInfo.addEventListener(
-          'highTextContrastChanged',
-          setHighTextContrastEnabled,
+          'accessibilityServiceChanged',
+          () => {
+            AccessibilityInfo.isHighTextContrastEnabled()
+              .then(setHighTextContrastEnabled)
+              .catch(() => undefined);
+          },
         )
       : null;
 
@@ -110,7 +114,7 @@ export function NexusSettingsProvider({ children }: PropsWithChildren) {
       active = false;
       reduceMotion.remove();
       screenReader.remove();
-      highContrast?.remove();
+      accessibilityService?.remove();
     };
   }, []);
 
