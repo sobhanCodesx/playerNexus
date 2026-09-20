@@ -802,14 +802,18 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     toggleRepeat: () =>
       setRepeatMode((current) => current === 'off' ? 'all' : current === 'all' ? 'one' : 'off'),
     playNext: (item) => {
+      if (item.id === track.id) return;
       setQueue((current) => {
-        const without = current.filter((entry) => entry.id !== item.id);
         const activeId = track.id;
-        const activeIndex = without.findIndex((entry) => entry.id === activeId);
-        const insertAt = Math.max(0, activeIndex + 1);
-        without.splice(insertAt, 0, item);
-        setCurrentIndex(insertAt > 0 ? insertAt - 1 : 0);
-        return without;
+        const nextQueue = current.filter((entry) => entry.id !== item.id);
+        const activeIndex = nextQueue.findIndex((entry) => entry.id === activeId);
+        const insertAt = activeIndex >= 0
+          ? activeIndex + 1
+          : Math.min(currentIndex + 1, nextQueue.length);
+        nextQueue.splice(insertAt, 0, item);
+        const restoredActiveIndex = nextQueue.findIndex((entry) => entry.id === activeId);
+        if (restoredActiveIndex >= 0) setCurrentIndex(restoredActiveIndex);
+        return nextQueue;
       });
     },
     addToQueue: (item) => {
@@ -829,7 +833,6 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     },
     scanLibrary,
     enableAudioReactive,
-    isTransitioning,
   }), [
     track,
     queue,
