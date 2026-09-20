@@ -411,7 +411,15 @@ export function NexusOrb({
     );
   }, [active, idle, settings.reduceMotion]);
 
-  const path = useMemo(() => organicPath(size, bands), [size, bands]);
+  const pathSteps =
+    settings.visualQuality === 'ultra' ? 48 : settings.visualQuality === 'low' ? 16 : 28;
+  const pathBass = Math.round(bands.bass * pathSteps) / pathSteps;
+  const pathMid = Math.round(bands.mid * pathSteps) / pathSteps;
+  const pathHigh = Math.round(bands.high * pathSteps) / pathSteps;
+  const path = useMemo(
+    () => organicPath(size, { ...bands, bass: pathBass, mid: pathMid, high: pathHigh }),
+    [size, pathBass, pathMid, pathHigh],
+  );
   const animated = useAnimatedStyle(() => ({
     transform: [
       { rotate: interpolate(idle.value, [0, 1], [-2.5, 3.5]) + 'deg' },

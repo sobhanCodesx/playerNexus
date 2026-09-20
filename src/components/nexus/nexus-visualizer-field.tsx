@@ -76,9 +76,35 @@ export function NexusVisualizerField({
     drift.value = withRepeat(withTiming(1, { duration: active ? 9000 : 14000 }), -1, true);
   }, [active, drift, settings.reduceMotion]);
 
+  const contourSteps =
+    settings.visualQuality === 'ultra' ? 42 : settings.visualQuality === 'low' ? 14 : 24;
+  const contourBass = Math.round(bands.bass * contourSteps) / contourSteps;
+  const contourMid = Math.round(bands.mid * contourSteps) / contourSteps;
+  const contourHigh = Math.round(bands.high * contourSteps) / contourSteps;
+  const contourTransient = Math.round(bands.transient * contourSteps) / contourSteps;
   const paths = useMemo(
-    () => Array.from({ length: quality.visualizerLayers }, (_, layer) => contourPath(size, bands, layer)),
-    [bands, quality.visualizerLayers, size],
+    () => Array.from(
+      { length: quality.visualizerLayers },
+      (_, layer) => contourPath(
+        size,
+        {
+          ...bands,
+          bass: contourBass,
+          mid: contourMid,
+          high: contourHigh,
+          transient: contourTransient,
+        },
+        layer,
+      ),
+    ),
+    [
+      contourBass,
+      contourHigh,
+      contourMid,
+      contourTransient,
+      quality.visualizerLayers,
+      size,
+    ],
   );
 
   const motion = useAnimatedStyle(() => ({
